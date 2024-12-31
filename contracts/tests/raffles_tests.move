@@ -49,12 +49,12 @@ public fun begin(): TestRunner {
     clock_end_date.set_for_testing(24*HOUR);
 
     let raffle = create_raffle_for_testing(
-        scen.ctx(),
         payment,
         clock::timestamp_ms(&clock_end_date),
         min_tickets,
         max_tickets,
         ticket_price,
+        scen.ctx(),
     );
 
     clock::destroy_for_testing(clock_end_date);
@@ -72,8 +72,8 @@ public fun begin_to_end_raffle(): TestRunner {
     let payment_payee = coin::mint_for_testing(100_000_000_000, runner.scen.ctx());
 
     let clock = clock::create_for_testing(runner.scen.ctx());
-    buy_ticket(runner.scen.ctx(), &mut runner.raffle, 3, &clock, payment);
-    buy_ticket(&mut ctx_payee, &mut runner.raffle, 5, &clock, payment_payee);
+    buy_ticket(&mut runner.raffle, 3, &clock, payment, runner.scen.ctx());
+    buy_ticket(&mut runner.raffle, 5, &clock, payment_payee, &mut ctx_payee);
 
     clock::destroy_for_testing(clock);
 
@@ -92,13 +92,13 @@ fun test_create_raffle() {
     let ticket_price = 10;
 
     create_raffle(
-        &mut ctx,
         &clock,
         payment,
         end_date,
         min_tickets,
         max_tickets,
         ticket_price,
+        &mut ctx,
     );
 
     clock::destroy_for_testing(clock);
@@ -115,13 +115,13 @@ fun test_buy_ticket() {
     assert!(get_participants(&runner.raffle).length() == 0);
     assert!(get_balance(&runner.raffle).value() == 0);
 
-    buy_ticket(runner.scen.ctx(), &mut runner.raffle, 1, &clock, payment);
+    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
 
     assert!(get_participants(&runner.raffle).length() == 1);
     assert!(get_participants(&runner.raffle).borrow(0) == @0x777);
     assert!(get_balance(&runner.raffle).value() == 20_000_000_000);
 
-    buy_ticket(&mut ctx_payee, &mut runner.raffle, 3, &clock, payment_payee);
+    buy_ticket(&mut runner.raffle, 3, &clock, payment_payee, &mut ctx_payee);
 
     assert!(get_participants(&runner.raffle).length() == 4);
     assert!(get_participants(&runner.raffle) == vector[@0x777, @0x999, @0x999, @0x999]);
@@ -203,7 +203,7 @@ fun test_redeem_status_completed() {
     //     ts.ctx(),
     // );
 
-    buy_ticket(runner.scen.ctx(), &mut runner.raffle, 1, &clock, payment);
+    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
 
     assert!(get_balance(&runner.raffle).value() == 180000000000);
     assert!(get_reward(&runner.raffle).value() == 100000000000);
@@ -279,7 +279,7 @@ fun test_redeem_owner_status_completed() {
     ts.next_tx(ZERO_ADDRESS);
     let random_state: Random = ts.take_shared();
 
-    buy_ticket(runner.scen.ctx(), &mut runner.raffle, 1, &clock, payment);
+    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
     clock.set_for_testing(48*HOUR);
 
     determine_winner(

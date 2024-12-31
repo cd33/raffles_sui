@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-build/*
+build
 .env
 autres_projets

@@ -39,13 +39,13 @@ fun init(ctx: &mut TxContext) {
 }
 
 public fun create_raffle(
-    ctx: &mut TxContext,
     clock: &Clock,
     payment: Coin<SUI>,
     end_date: u64,
     min_tickets: u64,
     max_tickets: u64,
     ticket_price: u64,
+    ctx: &mut TxContext,
 ) {
     assert!(end_date > clock::timestamp_ms(clock), EInvalidClock);
     assert!(coin::value(&payment) > 0, EInvalidPayment);
@@ -69,11 +69,11 @@ public fun create_raffle(
 }
 
 public fun buy_ticket(
-    ctx: &mut TxContext,
     raffle: &mut Raffle,
     amount_tickets: u64,
     clock: &Clock,
     payment: Coin<SUI>,
+    ctx: &mut TxContext,
 ) {
     assert!(raffle.end_date > clock::timestamp_ms(clock), EInvalidClock);
     assert!(raffle.participants.length() + amount_tickets < raffle.max_tickets, EInvalidTickets);
@@ -159,12 +159,12 @@ public fun redeem_owner(raffle: &mut Raffle, ctx: &mut TxContext) {
 
 #[test_only]
 public fun create_raffle_for_testing(
-    ctx: &mut TxContext,
     payment: Coin<SUI>,
     end_date: u64,
     min_tickets: u64,
     max_tickets: u64,
     ticket_price: u64,
+    ctx: &mut TxContext,
 ): Raffle {
     Raffle {
         id: object::new(ctx),
@@ -200,48 +200,3 @@ public fun get_winner(raffle: &Raffle): address {
 public fun get_status(raffle: &Raffle): u8 {
     raffle.status
 }
-
-// public fun end_raffle(ctx: &mut TxContext, raffle: &mut Raffle, clock: &Clock) {
-//     assert!(raffle.end_date <= clock::timestamp_ms(clock), EInvalidClock);
-
-//     if (raffle.participants.length() < raffle.min_tickets) {
-//         // Rembourser les acheteurs
-//         let mut i = 0;
-//         let length = vector::length(&raffle.participants);
-//         while (i < length) {
-//             let participant = raffle.participants.pop_back();
-//             let participant_coin = coin::from_balance(
-//                 raffle.balance.split(raffle.ticket_price),
-//                 ctx,
-//             );
-//             transfer::public_transfer(participant_coin, participant);
-//             i = i + 1;
-//         };
-//         raffle.participants = vector::empty();
-//         let owner_coin = coin::from_balance(
-//             raffle.reward.withdraw_all(),
-//             ctx,
-//         );
-//         debug::print(&i);
-//         return transfer::public_transfer(owner_coin, raffle.owner)
-//     };
-//     debug::print(&@0x0);
-//     raffle.winner = raffle.participants.pop_back();
-//     raffle.participants = vector::empty();
-
-//     // let r = random::create(ctx);
-//     // let winner = random_winner(ctx, raffle, r);
-//     // debug::print(&winner);
-
-//     // raffle.winner = raffle.participants.get(random::u64(raffle.participants.length()));
-
-//     // si assez de tickets vendus
-//     // tirage au sort
-//     // transferer reward au gagnant
-//     // transferer balance au vendeur
-//     // let winner = raffle.tickets.get(random::u64(raffle.total_tickets));
-//     // let reward = Coin { value: raffle.reward_amount, currency: SUI };
-
-//     // coin::transfer(&mut raffle.balance, reward, winner);
-//     // coin::transfer(&mut raffle.balance, coin::value(&raffle.balance), raffle.owner);
-// }
