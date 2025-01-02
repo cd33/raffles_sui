@@ -1,63 +1,132 @@
-// import { getFullnodeUrl, SuiClient } from "@mysten/sui.js/client";
-// import { TransactionBlock } from "@mysten/sui.js/dist/cjs/transactions";
-// import { ADMIN_CAP, PACKAGE_ID, RAFFLE } from "../deployed_addresses.json";
+import { PaginatedEvents } from "@mysten/sui.js/client";
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui.js/utils";
+import type { SuiClient } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { PACKAGE_ID } from "../deployed_addresses.json";
 
-// const NETWORK = import.meta.env.VITE_NETWORK;
+export type RaffleType = {
+  reward: number;
+  owner: string;
+  end_date: number;
+  min_tickets: number;
+  max_tickets: number;
+  ticket_price: number;
+  participants: string[];
+  balance: number;
+  winner: string;
+  status: number;
+};
 
-// export const get_datas = async () => {
-//   const rpcUrl = getFullnodeUrl(NETWORK);
-//   const client = new SuiClient({ url: rpcUrl });
-//   const res = await client.getObject({
-//     id: RAFFLE,
-//     options: {
-//       showContent: true,
-//     },
-//   });
+export const get_datas = async (id: string, suiClient: SuiClient) => {
+  const res = await suiClient.getObject({
+    id,
+    options: {
+      showContent: true,
+    },
+  });
 
-//   const fields = (
-//     res?.data?.content as unknown as {
-//       fields: { paused: boolean; price: number };
-//     }
-//   )?.fields;
-//   return { pause: fields.paused, price: fields.price };
-// };
+  const fields = (
+    res?.data?.content as unknown as {
+      fields: RaffleType;
+    }
+  )?.fields;
 
-// export const get_set_pixel_tx = (
-//   x: number,
-//   y: number,
-//   color: number,
-//   price: number,
-// ): TransactionBlock => {
-//   const tx = new TransactionBlock();
-//   const [payment] = tx.splitCoins(tx.gas, [tx.pure(price)]);
+  return fields;
 
-//   tx.moveCall({
-//     target: `${PACKAGE_ID}::raffles::set_pixel`,
-//     arguments: [
-//       tx.object(RAFFLE),
-//       tx.pure(x),
-//       tx.pure(y),
-//       tx.pure(color),
-//       payment,
-//     ],
-//   });
-//   return tx;
-// };
+  // // équivalent de:
+  // const { data } = useSuiClientQuery("getObject", {
+  //   id: RAFFLE,
+  //   options: {
+  //     showContent: true,
+  //   },
+  // });
+};
 
-// export const get_set_pause_tx = (): TransactionBlock => {
-//   const tx = new TransactionBlock();
-//   tx.moveCall({
-//     target: `${PACKAGE_ID}::raffles::set_pause`,
-//     arguments: [tx.object(ADMIN_CAP), tx.object(RAFFLE)],
-//   });
-//   return tx;
-// };
+export const create_raffle_tx = (
+  reward: number,
+  end_date: number,
+  min_tickets: number,
+  max_tickets: number,
+  ticket_price: number,
+) => {
+  const tx = new Transaction();
+  const [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(reward)]);
 
-// export const get_set_price_tx = (new_price: number): TransactionBlock => {
-//   const tx = new TransactionBlock();
-//   tx.moveCall({
-//     target: `${PACKAGE_ID}::raffles::set_price`,
-//     arguments: [tx.object(ADMIN_CAP), tx.object(RAFFLE), tx.pure(new_price)],
-//   });
-//   return tx;
-// };
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::create_raffle`,
+    arguments: [
+      tx.object(SUI_CLOCK_OBJECT_ID),
+      tx.object(payment),
+      tx.pure.u64(end_date),
+      tx.pure.u64(min_tickets),
+      tx.pure.u64(max_tickets),
+      tx.pure.u64(ticket_price),
+    ],
+  });
+
+  return tx;
+};
+
+export const buy_ticket = (
+  raffle_address: string,
+  amount_tickets: number,
+  price: number,
+) => {
+  const tx = new Transaction();
+  const [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(price)]);
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::buy_ticket`,
+    arguments: [
+      tx.object(raffle_address),
+      tx.pure.u64(amount_tickets),
+      tx.object(SUI_CLOCK_OBJECT_ID),
+      tx.object(payment),
+    ],
+  });
+
+  return tx;
+};
+
+export const determine_winner = (raffle_address: string) => {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::determine_winner`,
+    arguments: [
+      tx.object(raffle_address),
+      tx.object("0x8"), // r: &Random
+      tx.object(SUI_CLOCK_OBJECT_ID),
+    ],
+  });
+
+  return tx;
+};
+
+export const redeem = (raffle_address: string) => {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::redeem`,
+    arguments: [tx.object(raffle_address)],
+  });
+
+  return tx;
+};
+
+export const redeem_owner = (raffle_address: string) => {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::redeem_owner`,
+    arguments: [tx.object(raffle_address)],
+  });
+
+  return tx;
+};
+
+export const get_raffle_created_events = async (suiClient: SuiClient) => {
+  const events: PaginatedEvents = await suiClient.queryEvents({
+    query: {
+      MoveEventType: `${PACKAGE_ID}::raffles::RaffleCreated`,
+    },
+  });
+  return events.data.map((event) => (event.parsedJson as { id: string }).id);
+};

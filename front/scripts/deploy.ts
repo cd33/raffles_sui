@@ -149,6 +149,7 @@ const raffle_id = find_one_by_type(
 deployed_addresses = Object.assign(deployed_addresses, {
   RAFFLE: raffle_id,
 });
+console.log("deployed_addresses", deployed_addresses);
 
 console.log("Writing addresses to json...");
 const path_to_address_file = path.join(
@@ -159,3 +160,4 @@ writeFileSync(
   path_to_address_file,
   JSON.stringify(deployed_addresses, null, 4),
 );
+console.log("DONE");

@@ -26,17 +26,16 @@ sui client faucet
 
 ## TODO
 
-create_raffle, buy_ticket, determine_winner, redeem, redeem_owner
-faire un front et tester l'aléatoire en local
-front vite react: créer raffle, voir les raffles, affichage du nom, interactions
-mettre en ligne
+- FRONT: créer raffle, voir les raffles, affichage du nom, interactions
+- Mettre en ligne avec Vercel
 
 ## Futur
 
-mode pause avec admincap
-tester tous les fails
-faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
-voir si outils de sécu existent comme pour solidity
+- check besoins pier, en fct virer admincap ?
+- tester tous les fails
+- faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
+- voir si outils de sécu existent comme pour solidity
+- ajouter les erc20 pour les rewards et balance
 
 ## Liens Utiles
 
@@ -45,3 +44,34 @@ voir si outils de sécu existent comme pour solidity
 - [Basic Drand Coin Raffle](https://github.com/Bucket-Protocol/raffle-paper/blob/main/sources/basic_drand_coin_raffle.move) : Un exemple de contrat Move pour une raffle utilisant Drand pour la génération de nombres aléatoires.
 - [Small Raffle](https://github.com/MystenLabs/sui-native-randomness/blob/main/small-raffle/small_raffle/sources/small_raffle.move) : Un exemple de petit contrat de raffle utilisant la génération de nombres aléatoires native de Sui.
 - [Polymedia Bidder](https://github.com/juzybits/polymedia-bidder/blob/main/src/sui/sources/user.move) : Un exemple de contrat Move pour un système de soumission d'enchères sur Polymedia.
+- [Aptos Raffle](https://github.com/mokshyaprotocol/aptos-raffle/blob/main/sources/raffle.move)
+
+## Events
+
+```sh
+use sui::event;
+public struct RandomNumber has copy, drop {
+    random_number: u64,
+}
+
+public fun test_random(r: &Random, ctx: &mut TxContext) {
+    let mut generator = r.new_generator(ctx);
+    let random_number = generator.generate_u64_in_range(1, 10);
+    event::emit(RandomNumber { random_number });
+    random_number;
+}
+```
+
+```sh
+const txResult = await signAndExecute({
+    transaction: tx
+});
+
+await new Promise((resolve) => setTimeout(resolve, 2000));
+
+const eventsResult = await client.queryEvents({
+    query: { Transaction: txResult.digest }
+});
+
+const firstEvent = eventsResult.data[0]?.parsedJson
+```

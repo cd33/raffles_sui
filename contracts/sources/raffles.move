@@ -3,24 +3,29 @@ module raffles::raffles;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
+use sui::event;
 use sui::random::Random;
 use sui::sui::SUI;
 use sui::tx_context::sender;
 
-const EInvalidClock: u64 = 0;
-const EInvalidTickets: u64 = 1;
-const EInvalidPayment: u64 = 2;
-const EGameAlreadyCompleted: u64 = 3;
+const EGameAlreadyCompleted: u64 = 0;
+const EInvalidClock: u64 = 1;
+const EInvalidTickets: u64 = 2;
+const EInvalidPayment: u64 = 3;
 const EInvalidOwner: u64 = 4;
 const IN_PROGRESS: u8 = 0;
 const COMPLETED: u8 = 1;
 const FAILED: u8 = 2;
 
+public struct RaffleCreated has copy, drop {
+    id: object::ID,
+}
+
 public struct AdminCap has key, store {
     id: UID,
 }
 
-public struct Raffle has key, store {
+public struct Raffle has key {
     id: UID,
     reward: Balance<SUI>,
     owner: address,
@@ -64,6 +69,10 @@ public fun create_raffle(
         winner: @0x0,
         status: IN_PROGRESS,
     };
+
+    event::emit(RaffleCreated {
+        id: object::uid_to_inner(&raffle.id),
+    });
 
     transfer::share_object(raffle);
 }

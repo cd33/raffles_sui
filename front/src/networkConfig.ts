@@ -1,8 +1,11 @@
-import { getFullnodeUrl } from "@mysten/sui/client";
 import { createNetworkConfig } from "@mysten/dapp-kit";
+import { getFullnodeUrl } from "@mysten/sui/client";
 
 const { networkConfig, useNetworkVariable, useNetworkVariables } =
   createNetworkConfig({
+    localnet: {
+      url: getFullnodeUrl("localnet"),
+    },
     devnet: {
       url: getFullnodeUrl("devnet"),
     },
@@ -14,4 +17,4 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
     },
   });
 
-export { useNetworkVariable, useNetworkVariables, networkConfig };
+export { networkConfig, useNetworkVariable, useNetworkVariables };
