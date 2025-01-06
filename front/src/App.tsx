@@ -1,14 +1,13 @@
 import {
   ConnectButton,
-  useSignAndExecuteTransaction,
+  useCurrentAccount,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { SUI_DECIMALS } from "@mysten/sui.js/utils";
-import { Box, Button, Container, Flex, Heading } from "@radix-ui/themes";
+import { Box, Container, Flex, Heading } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
+import { CreateRaffle } from "./components/CreateRaffle";
 import { Raffles } from "./Raffles";
 import {
-  create_raffle_tx,
   get_datas,
   get_raffle_created_events,
   RaffleType,
@@ -16,7 +15,7 @@ import {
 
 function App() {
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const account = useCurrentAccount();
   const [raffles, setRaffles] = useState<RaffleType[]>([]);
 
   const getRaffles = async () => {
@@ -30,38 +29,6 @@ function App() {
   useEffect(() => {
     getRaffles();
   }, []);
-
-  const reward = 20 * 10 ** SUI_DECIMALS;
-  const end_date = Date.now() + 1000 * 60 * 60 * 24 * 7;
-  const min_tickets = 11;
-  const max_tickets = 20;
-  const ticket_price = 2 * 10 ** SUI_DECIMALS;
-
-  const createRaffle = async () => {
-    signAndExecute(
-      {
-        transaction: create_raffle_tx(
-          reward,
-          end_date,
-          min_tickets,
-          max_tickets,
-          ticket_price,
-        ),
-      },
-      {
-        onSuccess: () => {
-          setTimeout(() => {
-            getRaffles();
-          }, 1000);
-        },
-        onError: (error) => {
-          console.error(error);
-        },
-      },
-    );
-  };
-
-  console.log("raffles", raffles);
 
   return (
     <>
@@ -82,14 +49,53 @@ function App() {
           <ConnectButton />
         </Box>
       </Flex>
+
       <Container>
-        <Container mt="5" pt="2" px="4">
-          <Raffles raffles={raffles} />
+        <Container>
+          <h2 style={{ textAlign: "center", marginTop: "16px" }}>My Raffles</h2>
+          <Raffles
+            raffles={raffles.filter(
+              (raffle) => raffle.owner === account?.address,
+            )}
+            getRaffles={getRaffles}
+          />
         </Container>
 
-        <Button mt="5" style={{ width: "100%" }} onClick={createRaffle}>
-          Create Raffle
-        </Button>
+        <span
+          style={{
+            display: "block",
+            width: "100%",
+            height: "1px",
+            backgroundColor: "white",
+            marginTop: "24px",
+            marginBottom: "16px",
+          }}
+        />
+
+        <Container>
+          <h2 style={{ textAlign: "center" }}>All Raffles</h2>
+          <Raffles
+            raffles={raffles.filter(
+              (raffle) => raffle.owner !== account?.address,
+            )}
+            getRaffles={getRaffles}
+          />
+        </Container>
+
+        <span
+          style={{
+            display: "block",
+            width: "100%",
+            height: "1px",
+            backgroundColor: "white",
+            marginTop: "24px",
+            marginBottom: "16px",
+          }}
+        />
+
+        <Container mb="8">
+          <CreateRaffle getRaffles={getRaffles} />
+        </Container>
       </Container>
     </>
   );

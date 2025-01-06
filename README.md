@@ -26,16 +26,17 @@ sui client faucet
 
 ## TODO
 
-- FRONT: créer raffle, voir les raffles, affichage du nom, interactions
+- ajouter les erc20 pour les rewards et balance
+- puis les NFTs
+- ajouter tax sur chaque redeem
+- tester tous les fails
 - Mettre en ligne avec Vercel
 
 ## Futur
 
-- check besoins pier, en fct virer admincap ?
-- tester tous les fails
+- check uml, en fct virer admincap ?
 - faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
 - voir si outils de sécu existent comme pour solidity
-- ajouter les erc20 pour les rewards et balance
 
 ## Liens Utiles
 

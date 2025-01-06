@@ -5,6 +5,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { PACKAGE_ID } from "../deployed_addresses.json";
 
 export type RaffleType = {
+  id: { id: string };
   reward: number;
   owner: string;
   end_date: number;

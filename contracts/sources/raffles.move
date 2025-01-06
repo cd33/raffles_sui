@@ -85,8 +85,9 @@ public fun buy_ticket(
     ctx: &mut TxContext,
 ) {
     assert!(raffle.end_date > clock::timestamp_ms(clock), EInvalidClock);
-    assert!(raffle.participants.length() + amount_tickets < raffle.max_tickets, EInvalidTickets);
+    assert!(amount_tickets > 0 && coin::value(&payment) > 0, EInvalidTickets);
     assert!(coin::value(&payment) >= amount_tickets * raffle.ticket_price, EInvalidTickets);
+    assert!(raffle.participants.length() + amount_tickets <= raffle.max_tickets, EInvalidTickets);
 
     coin::put(&mut raffle.balance, payment);
     let mut i = 0;
@@ -97,7 +98,11 @@ public fun buy_ticket(
 }
 
 entry fun determine_winner(raffle: &mut Raffle, r: &Random, clock: &Clock, ctx: &mut TxContext) {
-    assert!(raffle.end_date <= clock.timestamp_ms(), EInvalidClock);
+    assert!(
+        (raffle.end_date <= clock.timestamp_ms()) ||
+    (raffle.participants.length() == raffle.max_tickets),
+        EInvalidClock,
+    );
     assert!(raffle.status == IN_PROGRESS, EGameAlreadyCompleted);
 
     if (raffle.participants.length() < raffle.min_tickets) {
