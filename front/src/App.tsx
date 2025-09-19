@@ -1,11 +1,8 @@
-import {
-  ConnectButton,
-  useCurrentAccount,
-  useSuiClient,
-} from "@mysten/dapp-kit";
-import { Box, Container, Flex, Heading } from "@radix-ui/themes";
+import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { Container } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
 import { CreateRaffle } from "./components/CreateRaffle";
+import { Navbar } from "./components/Navbar";
 import { Raffles } from "./Raffles";
 import {
   get_datas,
@@ -32,23 +29,7 @@ function App() {
 
   return (
     <>
-      <Flex
-        position="sticky"
-        px="4"
-        py="2"
-        justify="between"
-        style={{
-          borderBottom: "1px solid var(--gray-a2)",
-        }}
-      >
-        <Box>
-          <Heading>Raffles</Heading>
-        </Box>
-
-        <Box>
-          <ConnectButton />
-        </Box>
-      </Flex>
+      <Navbar title="Raffles" />
 
       <Container>
         <Container>

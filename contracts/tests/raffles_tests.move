@@ -1,309 +1,805 @@
 #[test_only]
 module raffles::raffles_tests;
 
-use raffles::raffles::{
-    Raffle,
-    EGameAlreadyCompleted,
-    buy_ticket,
-    create_raffle,
-    create_raffle_for_testing,
-    determine_winner,
-    get_participants,
-    get_balance,
-    get_reward,
-    get_winner,
-    get_status,
-    redeem,
-    redeem_owner
-};
+use raffles::raffles::{Self, Raffle};
+use sui::balance;
 use sui::clock;
-use sui::coin;
+use sui::coin::{Self, Coin};
 use sui::random::{Self, Random};
-use sui::test_scenario;
-use sui::test_utils;
+use sui::test_scenario::{Self as test, next_tx, ctx};
 
-const ZERO_ADDRESS: address = @0x0;
-const ADMIN: address = @0x777;
-// const ADMIN_2: address = @0x888;
-const PAYEE: address = @0x999;
-// const BIDDER_1: address = @0xb1;
-// const BIDDER_2: address = @0xb2;
-// const RANDO: address = @0xbabe;
+public struct REWARD has drop {}
+public struct PAYMENT has drop {}
 
-public struct TestRunner {
-    scen: test_scenario::Scenario,
-    raffle: Raffle,
-}
-
-const HOUR: u64 = 3600 * 1000;
-
-public fun begin(): TestRunner {
-    let mut scen = test_scenario::begin(ADMIN);
-    let mut clock_end_date = clock::create_for_testing(scen.ctx());
-    let payment = coin::mint_for_testing(100_000_000_000, scen.ctx());
-
-    let min_tickets = 9;
-    let max_tickets = 10;
-    let ticket_price = 20_000_000_000;
-
-    clock_end_date.set_for_testing(24*HOUR);
-
-    let raffle = create_raffle_for_testing(
-        payment,
-        clock::timestamp_ms(&clock_end_date),
-        min_tickets,
-        max_tickets,
-        ticket_price,
-        scen.ctx(),
-    );
-
-    clock::destroy_for_testing(clock_end_date);
-
-    return TestRunner {
-        scen,
-        raffle,
-    }
-}
-
-public fun begin_to_end_raffle(): TestRunner {
-    let mut runner = begin();
-    let mut ctx_payee = tx_context::new_from_hint(PAYEE, 0, 0, 0, 0);
-    let payment = coin::mint_for_testing(60_000_000_000, runner.scen.ctx());
-    let payment_payee = coin::mint_for_testing(100_000_000_000, runner.scen.ctx());
-
-    let clock = clock::create_for_testing(runner.scen.ctx());
-    buy_ticket(&mut runner.raffle, 3, &clock, payment, runner.scen.ctx());
-    buy_ticket(&mut runner.raffle, 5, &clock, payment_payee, &mut ctx_payee);
-
-    clock::destroy_for_testing(clock);
-
-    return runner
-}
-// ***********************************************************
+const ADMIN: address = @0xABBA;
+const USER1: address = @0x1234;
+const USER2: address = @0x5678;
 
 #[test]
-fun test_create_raffle() {
-    let mut ctx = tx_context::dummy();
-    let clock = clock::create_for_testing(&mut ctx);
-    let payment = coin::mint_for_testing(100_000_000_000, &mut ctx);
-    let end_date = 24*HOUR;
-    let min_tickets = 5;
-    let max_tickets = 10;
-    let ticket_price = 10;
+fun test_create_raffle_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
 
-    create_raffle(
-        &clock,
-        payment,
-        end_date,
-        min_tickets,
-        max_tickets,
-        ticket_price,
-        &mut ctx,
-    );
+    clock::set_for_testing(&mut clock, 1000);
+
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10, // prix du ticket
+            2000, // date de fin
+            2, // min tickets
+            10, // max tickets
+            ctx(&mut scenario),
+        );
+    };
+
+    // Tester l'état dans une nouvelle transaction
+    next_tx(&mut scenario, USER1);
+    {
+        let raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+
+        // Vérifier l'état initial
+        let status = raffles::get_status(&raffle);
+        assert!(status == 0, 0); // IN_PROGRESS
+
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 1); // Pas encore de gagnant
+
+        let participants = raffles::get_participants(&raffle);
+        assert!(participants.length() == 0, 2); // Pas encore de participants
+
+        test::return_shared(raffle);
+    };
 
     clock::destroy_for_testing(clock);
+    test::end(scenario);
 }
 
 #[test]
-fun test_buy_ticket() {
-    let mut runner = begin();
-    let clock = clock::create_for_testing(runner.scen.ctx());
-    let payment = coin::mint_for_testing(20_000_000_000, runner.scen.ctx());
-    let mut ctx_payee = tx_context::new_from_hint(PAYEE, 0, 0, 0, 0);
-    let payment_payee = coin::mint_for_testing(60_000_000_000, runner.scen.ctx());
+fun test_helper_functions_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
 
-    assert!(get_participants(&runner.raffle).length() == 0);
-    assert!(get_balance(&runner.raffle).value() == 0);
+    clock::set_for_testing(&mut clock, 1000);
 
-    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(500, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            15,
+            2000, // date de fin
+            3, // min tickets
+            8, // max tickets
+            ctx(&mut scenario),
+        );
+    };
 
-    assert!(get_participants(&runner.raffle).length() == 1);
-    assert!(get_participants(&runner.raffle).borrow(0) == @0x777);
-    assert!(get_balance(&runner.raffle).value() == 20_000_000_000);
+    // Tester les fonctions getter dans une nouvelle transaction
+    next_tx(&mut scenario, USER1);
+    {
+        let raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
 
-    buy_ticket(&mut runner.raffle, 3, &clock, payment_payee, &mut ctx_payee);
+        // Tester toutes les fonctions getter
+        let status = raffles::get_status(&raffle);
+        assert!(status == 0, 0); // IN_PROGRESS
 
-    assert!(get_participants(&runner.raffle).length() == 4);
-    assert!(get_participants(&runner.raffle) == vector[@0x777, @0x999, @0x999, @0x999]);
-    assert!(get_balance(&runner.raffle).value() == 80_000_000_000);
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 1);
+
+        let participants = raffles::get_participants(&raffle);
+        assert!(participants.length() == 0, 2);
+
+        let reward = raffles::get_reward(&raffle);
+        assert!(balance::value(reward) == 500, 3);
+
+        let balance = raffles::get_balance(&raffle);
+        assert!(balance::value(balance) == 0, 4);
+
+        test::return_shared(raffle);
+    };
 
     clock::destroy_for_testing(clock);
-    test_utils::destroy(runner);
+    test::end(scenario);
 }
 
 #[test]
-#[expected_failure(abort_code = EGameAlreadyCompleted)]
-fun test_failed_redeem_without_determine_winner() {
-    let mut runner = begin_to_end_raffle();
+fun test_buy_tickets_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
 
-    assert!(get_balance(&runner.raffle).value() == 160000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
-    assert!(get_winner(&runner.raffle) == @0x0);
-    assert!(get_status(&runner.raffle) == 0);
+    clock::set_for_testing(&mut clock, 1000);
 
-    redeem(&mut runner.raffle, runner.scen.ctx());
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10,
+            2000,
+            2,
+            10,
+            ctx(&mut scenario),
+        );
+    };
 
-    test_utils::destroy(runner);
+    // Acheter des tickets
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(30, ctx(&mut scenario)); // 3 tickets
+
+        raffles::buy_ticket(
+            &mut raffle,
+            3, // nombre de tickets
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        // Vérifier que les participants ont été ajoutés
+        let participants = raffles::get_participants(&raffle);
+        assert!(participants.length() == 3, 0);
+
+        test::return_shared(raffle);
+    };
+
+    clock::destroy_for_testing(clock);
+    test::end(scenario);
 }
 
 #[test]
-fun test_redeem_status_failed() {
-    let mut runner = begin_to_end_raffle();
-    let mut clock = clock::create_for_testing(runner.scen.ctx());
-    clock.set_for_testing(48*HOUR);
+fun test_multiple_users_buy_tickets_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
 
-    let mut ts = test_scenario::begin(ZERO_ADDRESS);
-    random::create_for_testing(ts.ctx());
-    ts.next_tx(ZERO_ADDRESS);
-    let random_state: Random = ts.take_shared();
+    clock::set_for_testing(&mut clock, 1000);
 
-    assert!(get_balance(&runner.raffle).value() == 160000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
-    assert!(get_winner(&runner.raffle) == @0x0);
-    assert!(get_status(&runner.raffle) == 0);
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10,
+            2000,
+            2,
+            10,
+            ctx(&mut scenario),
+        );
+    };
 
-    determine_winner(
-        &mut runner.raffle,
-        &random_state,
-        &clock,
-        runner.scen.ctx(),
-    );
+    // Utilisateur 1 achète 2 tickets
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(20, ctx(&mut scenario));
 
-    assert!(get_winner(&runner.raffle) == @0x0);
-    assert!(get_status(&runner.raffle) == 2);
-    assert!(
-        get_participants(&runner.raffle) == vector[ @0x777, @0x777, @0x777, @0x999, @0x999, @0x999, @0x999, @0x999],
-    );
+        raffles::buy_ticket(
+            &mut raffle,
+            2,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
 
-    redeem(&mut runner.raffle, runner.scen.ctx());
+        // Vérifier que le total des participants est 2
+        let participants = raffles::get_participants(&raffle);
+        assert!(participants.length() == 2, 0);
 
-    assert!(get_participants(&runner.raffle) == vector[@0x999, @0x999, @0x999, @0x999, @0x999]);
-    assert!(get_balance(&runner.raffle).value() == 100000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
+        // Vérifier que le balance contient les paiements
+        let balance = raffles::get_balance(&raffle);
+        assert!(balance::value(balance) == 20, 1);
+
+        test::return_shared(raffle);
+    };
+
+    // Utilisateur 2 achète 3 tickets
+    next_tx(&mut scenario, USER2);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(30, ctx(&mut scenario));
+
+        raffles::buy_ticket(
+            &mut raffle,
+            3,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        // Vérifier que le total des participants est 5
+        let participants = raffles::get_participants(&raffle);
+        assert!(participants.length() == 5, 2);
+
+        // Vérifier que le balance contient les paiements
+        let balance = raffles::get_balance(&raffle);
+        assert!(balance::value(balance) == 50, 3); // 2*10 + 3*10 = 50
+
+        test::return_shared(raffle);
+    };
 
     clock::destroy_for_testing(clock);
-    test_scenario::return_shared(random_state);
-    test_utils::destroy(runner);
-    ts.end();
+    test::end(scenario);
 }
 
 #[test]
-fun test_redeem_status_completed() {
-    let mut runner = begin_to_end_raffle();
-    let mut clock = clock::create_for_testing(runner.scen.ctx());
-    let payment = coin::mint_for_testing(20_000_000_000, runner.scen.ctx());
+fun test_determine_winner_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
 
-    let mut ts = test_scenario::begin(ZERO_ADDRESS);
-    random::create_for_testing(ts.ctx());
-    ts.next_tx(ZERO_ADDRESS);
-    let random_state: Random = ts.take_shared();
-    // random_state.update_randomness_state_for_testing(
-    //     0,
-    //     x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-    //     ts.ctx(),
-    // );
+    clock::set_for_testing(&mut clock, 1000);
 
-    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
+    // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
+    next_tx(&mut scenario, @0x0);
+    {
+        random::create_for_testing(ctx(&mut scenario));
+    };
 
-    assert!(get_balance(&runner.raffle).value() == 180000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
-    assert!(
-        get_participants(&runner.raffle) == vector[ @0x777, @0x777, @0x777, @0x999, @0x999, @0x999, @0x999, @0x999, @0x777],
-    );
-    assert!(get_winner(&runner.raffle) == @0x0);
-    assert!(get_status(&runner.raffle) == 0);
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10,
+            2000,
+            2,
+            10,
+            ctx(&mut scenario),
+        );
+    };
 
-    clock.set_for_testing(48*HOUR);
+    // Utilisateur 1 achète 2 tickets (nombre minimum pour que la raffle puisse se terminer)
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(20, ctx(&mut scenario));
 
-    determine_winner(
-        &mut runner.raffle,
-        &random_state,
-        &clock,
-        runner.scen.ctx(),
-    );
+        raffles::buy_ticket(
+            &mut raffle,
+            2,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
 
-    assert!(get_winner(&runner.raffle) == ADMIN);
-    assert!(get_status(&runner.raffle) == 1);
+        test::return_shared(raffle);
+    };
 
-    redeem(&mut runner.raffle, runner.scen.ctx());
+    // Avancer le temps pour que la raffle se termine
+    clock::set_for_testing(&mut clock, 2500);
 
-    assert!(get_balance(&runner.raffle).value() == 180000000000);
-    assert!(get_reward(&runner.raffle).value() == 0);
+    // Vérifier que le statut et le winner changent
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let random_state = test::take_shared<Random>(&scenario);
+
+        let status_before = raffles::get_status(&raffle);
+        assert!(status_before == 0, 1);
+        let winner_before = raffles::get_winner(&raffle);
+        assert!(winner_before == @0x0, 2);
+
+        raffles::determine_winner(
+            &mut raffle,
+            &random_state,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        let status_after = raffles::get_status(&raffle);
+        assert!(status_after == 1, 3);
+        let winner_after = raffles::get_winner(&raffle);
+        assert!(winner_after == USER1, 4);
+
+        test::return_shared(random_state);
+        test::return_shared(raffle);
+    };
 
     clock::destroy_for_testing(clock);
-    test_scenario::return_shared(random_state);
-    test_utils::destroy(runner);
-    ts.end();
+    test::end(scenario);
+}
+
+// Test qui vérifie la logique d'échec sans Random
+#[test]
+fun test_determine_winner_failed_logic() {
+    let mut scenario = test::begin(@0x0);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+
+    clock::set_for_testing(&mut clock, 1000);
+
+    // Créer l'état Random
+    next_tx(&mut scenario, @0x0);
+    {
+        random::create_for_testing(ctx(&mut scenario));
+    };
+
+    // Créer la raffle avec un minimum élevé
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10,
+            2000,
+            5, // min tickets élevé
+            10,
+            ctx(&mut scenario),
+        );
+    };
+
+    // Acheter seulement quelques tickets (insuffisant)
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(20, ctx(&mut scenario));
+
+        raffles::buy_ticket(&mut raffle, 2, payment_coin, &clock, ctx(&mut scenario));
+        test::return_shared(raffle);
+    };
+
+    // Avancer le temps
+    clock::set_for_testing(&mut clock, 2500);
+
+    // Déterminer le gagnant (devrait échouer)
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let random_state = test::take_shared<Random>(&scenario);
+
+        let status = raffles::get_status(&raffle);
+        assert!(status == 0, 0); // IN_PROGRESS
+
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 1);
+
+        raffles::determine_winner(&mut raffle, &random_state, &clock, ctx(&mut scenario));
+
+        // Vérifier que le statut est FAILED
+        let status = raffles::get_status(&raffle);
+        assert!(status == 2, 2); // FAILED
+
+        // Vérifier qu'aucun gagnant n'a été choisi
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 3);
+
+        test::return_shared(random_state);
+        test::return_shared(raffle);
+    };
+
+    clock::destroy_for_testing(clock);
+    test::end(scenario);
 }
 
 #[test]
-fun test_redeem_owner_status_failed() {
-    let mut runner = begin_to_end_raffle();
-    let mut clock = clock::create_for_testing(runner.scen.ctx());
-    clock.set_for_testing(48*HOUR);
+fun test_redeem_and_redeem_owner_status_completed_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+    clock::set_for_testing(&mut clock, 1000);
 
-    let mut ts = test_scenario::begin(ZERO_ADDRESS);
-    random::create_for_testing(ts.ctx());
-    ts.next_tx(ZERO_ADDRESS);
-    let random_state: Random = ts.take_shared();
+    // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
+    next_tx(&mut scenario, @0x0);
+    {
+        random::create_for_testing(ctx(&mut scenario));
+    };
 
-    determine_winner(
-        &mut runner.raffle,
-        &random_state,
-        &clock,
-        runner.scen.ctx(),
-    );
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            10,
+            2000,
+            2,
+            10,
+            ctx(&mut scenario),
+        );
+    };
 
-    assert!(get_balance(&runner.raffle).value() == 160000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
+    // Utilisateur 1 achète 2 tickets (nombre minimum pour que la raffle puisse se terminer)
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let payment_coin = coin::mint_for_testing<PAYMENT>(20, ctx(&mut scenario));
 
-    redeem_owner(&mut runner.raffle, runner.scen.ctx());
+        raffles::buy_ticket(
+            &mut raffle,
+            2,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
 
-    assert!(get_balance(&runner.raffle).value() == 160000000000);
-    assert!(get_reward(&runner.raffle).value() == 0);
+        test::return_shared(raffle);
+    };
+
+    // Avancer le temps pour que la raffle se termine
+    clock::set_for_testing(&mut clock, 2500);
+
+    // Le vainqueur est déterminé avec status success
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let random_state = test::take_shared<Random>(&scenario);
+
+        raffles::determine_winner(
+            &mut raffle,
+            &random_state,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        let status = raffles::get_status(&raffle);
+        assert!(status == 1, 0); // COMPLETED
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == USER1, 1);
+
+        test::return_shared(random_state);
+        test::return_shared(raffle);
+    };
+
+    // Redeem de USER1 (gagnant)
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 2);
+
+        raffles::redeem(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 0, 3);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<REWARD> a été transféré à USER1
+    next_tx(&mut scenario, USER1);
+    {
+        // Récupérer le coin qui a été transféré à USER1
+        let transferred_coin = test::take_from_sender<Coin<REWARD>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 1000, 4);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
+
+    // Redeem du owner de la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+
+        let balance_before = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_before) == 20, 5);
+
+        raffles::redeem_owner(&mut raffle, ctx(&mut scenario));
+
+        let balance_after = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_after) == 0, 6);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<PAYMENT> a été transféré à ADMIN
+    next_tx(&mut scenario, ADMIN);
+    {
+        // Récupérer le coin qui a été transféré à ADMIN
+        let transferred_coin = test::take_from_sender<Coin<PAYMENT>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 20, 7);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
 
     clock::destroy_for_testing(clock);
-    test_scenario::return_shared(random_state);
-    test_utils::destroy(runner);
-    ts.end();
+    test::end(scenario);
 }
 
 #[test]
-fun test_redeem_owner_status_completed() {
-    let mut runner = begin_to_end_raffle();
-    let mut clock = clock::create_for_testing(runner.scen.ctx());
-    let payment = coin::mint_for_testing(20_000_000_000, runner.scen.ctx());
+fun test_redeem_and_redeem_owner_status_failed_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+    clock::set_for_testing(&mut clock, 1000);
 
-    let mut ts = test_scenario::begin(ZERO_ADDRESS);
-    random::create_for_testing(ts.ctx());
-    ts.next_tx(ZERO_ADDRESS);
-    let random_state: Random = ts.take_shared();
+    // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
+    next_tx(&mut scenario, @0x0);
+    {
+        random::create_for_testing(ctx(&mut scenario));
+    };
 
-    buy_ticket(&mut runner.raffle, 1, &clock, payment, runner.scen.ctx());
-    clock.set_for_testing(48*HOUR);
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        // Test avec REWARD pour les deux tokens
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, REWARD>(
+            &clock,
+            reward_coin,
+            200,
+            2000,
+            6,
+            10,
+            ctx(&mut scenario),
+        );
+    };
 
-    determine_winner(
-        &mut runner.raffle,
-        &random_state,
-        &clock,
-        runner.scen.ctx(),
-    );
+    // Utilisateur 1 achète 2 tickets
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+        let payment_coin = coin::mint_for_testing<REWARD>(400, ctx(&mut scenario));
 
-    assert!(get_balance(&runner.raffle).value() == 180000000000);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
+        raffles::buy_ticket(
+            &mut raffle,
+            2,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
 
-    redeem_owner(&mut runner.raffle, runner.scen.ctx());
+        test::return_shared(raffle);
+    };
 
-    assert!(get_balance(&runner.raffle).value() == 0);
-    assert!(get_reward(&runner.raffle).value() == 100000000000);
+    // Utilisateur 2 achète 3 tickets
+    next_tx(&mut scenario, USER2);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+        let payment_coin = coin::mint_for_testing<REWARD>(600, ctx(&mut scenario));
+
+        raffles::buy_ticket(
+            &mut raffle,
+            3,
+            payment_coin,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        test::return_shared(raffle);
+    };
+
+    // Avancer le temps pour que la raffle se termine
+    clock::set_for_testing(&mut clock, 2500);
+
+    // Pas de vainqueur et status failed
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+        let random_state = test::take_shared<Random>(&scenario);
+
+        raffles::determine_winner(
+            &mut raffle,
+            &random_state,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        let status = raffles::get_status(&raffle);
+        assert!(status == 2, 0); // FAILED
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 1);
+
+        test::return_shared(random_state);
+        test::return_shared(raffle);
+    };
+
+    // Redeem de USER1
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 2);
+        let balance_before = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_before) == 1000, 3);
+
+        raffles::redeem(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 1000, 4);
+        let balance_after = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_after) == 600, 5);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<REWARD> a été transféré à USER1
+    next_tx(&mut scenario, USER1);
+    {
+        // Récupérer le coin qui a été transféré à USER1
+        let transferred_coin = test::take_from_sender<Coin<REWARD>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 400, 6);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
+
+    // Redeem de USER2
+    next_tx(&mut scenario, USER2);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 7);
+        let balance_before = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_before) == 600, 8);
+
+        raffles::redeem(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 1000, 9);
+        let balance_after = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_after) == 0, 10);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<REWARD> a été transféré à USER2
+    next_tx(&mut scenario, USER2);
+    {
+        // Récupérer le coin qui a été transféré à USER2
+        let transferred_coin = test::take_from_sender<Coin<REWARD>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 600, 11);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
+
+    // Redeem du owner de la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, REWARD>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 12);
+
+        raffles::redeem_owner(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 0, 13);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<REWARD> a été transféré à ADMIN
+    next_tx(&mut scenario, ADMIN);
+    {
+        // Récupérer le coin qui a été transféré à ADMIN
+        let transferred_coin = test::take_from_sender<Coin<REWARD>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 1000, 14);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
 
     clock::destroy_for_testing(clock);
-    test_scenario::return_shared(random_state);
-    test_utils::destroy(runner);
-    ts.end();
+    test::end(scenario);
 }
 
-// ********************** SCENARIOS **********************
-// #[test]
-// fun test_scenario() {}
-// ***********************************************************
+#[test]
+fun test_redeem_and_redeem_owner_status_failed_no_participant_success() {
+    let mut scenario = test::begin(ADMIN);
+    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+    clock::set_for_testing(&mut clock, 1000);
+
+    // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
+    next_tx(&mut scenario, @0x0);
+    {
+        random::create_for_testing(ctx(&mut scenario));
+    };
+
+    // Créer la raffle
+    next_tx(&mut scenario, ADMIN);
+    {
+        let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        raffles::create_raffle<REWARD, PAYMENT>(
+            &clock,
+            reward_coin,
+            200,
+            2000,
+            6,
+            10,
+            ctx(&mut scenario),
+        );
+    };
+
+    // Avancer le temps pour que la raffle se termine
+    clock::set_for_testing(&mut clock, 2500);
+
+    // Pas de vainqueur et status failed
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+        let random_state = test::take_shared<Random>(&scenario);
+
+        raffles::determine_winner(
+            &mut raffle,
+            &random_state,
+            &clock,
+            ctx(&mut scenario),
+        );
+
+        let status = raffles::get_status(&raffle);
+        assert!(status == 2, 0); // FAILED
+        let winner = raffles::get_winner(&raffle);
+        assert!(winner == @0x0, 1);
+
+        test::return_shared(random_state);
+        test::return_shared(raffle);
+    };
+
+    // Redeem de USER1, rien ne se passe
+    next_tx(&mut scenario, USER1);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 2);
+        let balance_before = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_before) == 0, 3);
+
+        raffles::redeem(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 1000, 4);
+        let balance_after = raffles::get_balance(&raffle);
+        assert!(balance::value(balance_after) == 0, 5);
+
+        test::return_shared(raffle);
+    };
+
+    // Redeem du owner de la raffle, il se rembourse
+    next_tx(&mut scenario, ADMIN);
+    {
+        let mut raffle = test::take_shared<Raffle<REWARD, PAYMENT>>(&scenario);
+
+        let reward_before = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_before) == 1000, 6);
+
+        raffles::redeem_owner(&mut raffle, ctx(&mut scenario));
+
+        let reward_after = raffles::get_reward(&raffle);
+        assert!(balance::value(reward_after) == 0, 7);
+
+        test::return_shared(raffle);
+    };
+
+    // Vérifier qu'un objet Coin<REWARD> a été transféré à ADMIN
+    next_tx(&mut scenario, ADMIN);
+    {
+        // Récupérer le coin qui a été transféré à ADMIN
+        let transferred_coin = test::take_from_sender<Coin<REWARD>>(&scenario);
+
+        // Vérifier que c'est bien la récompense complète
+        assert!(coin::value(&transferred_coin) == 1000, 8);
+
+        // Remettre le coin pour nettoyer le test
+        test::return_to_sender(&scenario, transferred_coin);
+    };
+
+    clock::destroy_for_testing(clock);
+    test::end(scenario);
+}

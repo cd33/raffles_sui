@@ -4,8 +4,10 @@ import { Button, Flex } from "@radix-ui/themes";
 import { ChangeEvent, useState } from "react";
 import { create_raffle_tx } from "../utils/functions";
 import { InputTitle } from "./InputTitle";
+import { SelectTitle } from "./SelectTitle";
 
 const oneDay = 1000 * 60 * 60 * 24;
+const coins = ["SUI", "USDT", "USDC"];
 
 const handleAmounts = (e: ChangeEvent<HTMLInputElement>) => {
   const number = Number(e.currentTarget.value);
@@ -19,6 +21,7 @@ export function CreateRaffle({
   getRaffles: () => Promise<void>;
 }) {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [rewardCoin, setRewardCoin] = useState(coins[0]);
   const [reward, setReward] = useState(0);
   const [end_date, setEndDate] = useState(Date.now());
   const [min_tickets, setMinTickets] = useState(0);
@@ -58,6 +61,12 @@ export function CreateRaffle({
     <Flex align="center" direction="column" gap="4">
       <h2>Create a Raffle</h2>
       <Flex mt="2" gap="4" direction={{ initial: "column", md: "row" }}>
+        <SelectTitle
+          title="Choose a Coin for the reward"
+          items={coins}
+          defaultValue={rewardCoin}
+          setter={setRewardCoin}
+        />
         <InputTitle
           title="Reward for the winner in SUI"
           value={reward}

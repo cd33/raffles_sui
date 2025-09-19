@@ -4,6 +4,21 @@
 
 Raffles est un projet utilisant le réseau Sui pour apprendre le langage MOVE.
 
+## Installation
+
+```bash
+curl https://sh.rustup.rs -sSf | sh
+sudo apt-get install curl git-all cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+sui client new-env --alias local --rpc http://127.0.0.1:9000
+```
+
+## Upgrade Sui
+
+```bash
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+```
+
 ## Créer package
 
 ```sh
@@ -24,12 +39,36 @@ sui client switch --env local
 sui client faucet
 ```
 
+## Compiler
+
+```sh
+sui move build
+```
+
+## Tester
+
+```sh
+sui move test
+```
+
+### Coverage
+
+```sh
+sui move test --coverage --dev
+sui move coverage summary
+sui move coverage source --module raffles
+```
+
 ## TODO
 
-- ajouter les erc20 pour les rewards et balance
-- puis les NFTs
-- ajouter tax sur chaque redeem
-- tester tous les fails
+- mettre à jour le front
+- faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
+
+- ajouter fonctions admin (pause, resume, withdraw funds), autre ?
+- ajouter tax sur les redeem (seulement les success ?)
+- adapter le front
+- ajouter les NFTs
+- adapter le front
 - Mettre en ligne avec Vercel
 
 ## Futur
@@ -37,6 +76,7 @@ sui client faucet
 - check uml, en fct virer admincap ?
 - faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
 - voir si outils de sécu existent comme pour solidity
+- min_ticket peut etre égal à max_ticket ?
 
 ## Liens Utiles
 
@@ -46,6 +86,7 @@ sui client faucet
 - [Small Raffle](https://github.com/MystenLabs/sui-native-randomness/blob/main/small-raffle/small_raffle/sources/small_raffle.move) : Un exemple de petit contrat de raffle utilisant la génération de nombres aléatoires native de Sui.
 - [Polymedia Bidder](https://github.com/juzybits/polymedia-bidder/blob/main/src/sui/sources/user.move) : Un exemple de contrat Move pour un système de soumission d'enchères sur Polymedia.
 - [Aptos Raffle](https://github.com/mokshyaprotocol/aptos-raffle/blob/main/sources/raffle.move)
+- [Linear Vesting Contract Example](https://github.com/Origin-Byte/nft-protocol/blob/e8e8efd77ab15d7b2cf30958fd748dbb3afbdaab/contracts/originmate/sources/linear_vesting.move#L157)
 
 ## Events
 
