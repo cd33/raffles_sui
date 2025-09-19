@@ -61,9 +61,9 @@ sui move coverage source --module raffles
 
 ## TODO
 
-- mettre à jour le front
-- faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
+- mettre à jour le front et faire tout fonctionner
 
+- tests: faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
 - ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - ajouter tax sur les redeem (seulement les success ?)
 - adapter le front

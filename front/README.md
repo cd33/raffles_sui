@@ -1,35 +1,28 @@
-# Sui dApp Starter Template
+# Sui Raffles
 
-This dApp was created using `@mysten/create-dapp` that sets up a basic React
-Client dApp using the following tools:
+## Déployer contract
 
-- [React](https://react.dev/) as the UI framework
-- [TypeScript](https://www.typescriptlang.org/) for type checking
-- [Vite](https://vitejs.dev/) for build tooling
-- [Radix UI](https://www.radix-ui.com/) for pre-built UI components
-- [ESLint](https://eslint.org/)
-- [`@mysten/dapp-kit`](https://sdk.mystenlabs.com/dapp-kit) for connecting to
-  wallets and loading data
-- [pnpm](https://pnpm.io/) for package management
+Ajuster les variables dans le fichier `.env` :
 
-## Starting your dApp
-
-To install dependencies you can run
-
-```bash
-pnpm install
+```env
+PRIVATE_KEY=""
+VITE_NETWORK_URL=""
 ```
 
-To start your dApp in development mode run
+Puis lancer la commande :
 
 ```bash
-pnpm dev
+pnpm run deploy
 ```
 
-## Building
-
-To build your app for deployment you can run
+## Ajouter un compte SUI au SDK local
 
 ```bash
-pnpm build
+sui keytool convert <clé_privée_base64>
+sui keytool import <clé_bech32> ed25519 --alias <nom_alias>
+sui client switch --address <alias_ou_adresse>
+sui client addresses
+sui client envs
+sui client switch --env local
+sui client faucet
 ```

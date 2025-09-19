@@ -1,7 +1,8 @@
-import { SuiClient, SuiObjectChange } from "@mysten/sui.js/client";
-import { Ed25519Keypair } from "@mysten/sui.js/keypairs/ed25519";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
-import { fromB64, SUI_CLOCK_OBJECT_ID } from "@mysten/sui.js/utils";
+import { bcs } from "@mysten/sui/bcs";
+import { SuiClient, SuiObjectChange } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction } from "@mysten/sui/transactions";
+import { fromBase64, SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { execSync } from "child_process";
 import "dotenv/config";
 import { writeFileSync } from "fs";
@@ -24,7 +25,7 @@ if (!PRIVATE_KEY || !NETWORK_URL) {
   process.exit(1);
 }
 
-const keypair = Ed25519Keypair.fromSecretKey(fromB64(PRIVATE_KEY).slice(1));
+const keypair = Ed25519Keypair.fromSecretKey(fromBase64(PRIVATE_KEY).slice(1));
 const path_to_contracts = path.join(
   dirname(fileURLToPath(import.meta.url)),
   "../../contracts",
@@ -41,20 +42,17 @@ const { modules, dependencies } = JSON.parse(
 );
 
 console.log("Deploying from address:", keypair.toSuiAddress());
-const deploy_tx = new TransactionBlock();
+const deploy_tx = new Transaction();
 const [upgrade_cap] = deploy_tx.publish({
   modules,
   dependencies,
 });
 
-deploy_tx.transferObjects(
-  [upgrade_cap],
-  deploy_tx.pure(keypair.toSuiAddress()),
-);
+deploy_tx.transferObjects([upgrade_cap], keypair.toSuiAddress());
 const { objectChanges, balanceChanges } =
-  await client.signAndExecuteTransactionBlock({
+  await client.signAndExecuteTransaction({
+    transaction: deploy_tx,
     signer: keypair,
-    transactionBlock: deploy_tx,
     options: {
       showBalanceChanges: true,
       showEffects: true,
@@ -77,7 +75,9 @@ if (!objectChanges) {
   console.log("Error: RPC did not return objectChanges");
   process.exit(1);
 }
-const published_event = objectChanges.find((obj) => obj.type == "published");
+const published_event = objectChanges.find(
+  (obj: SuiObjectChange) => obj.type == "published",
+);
 if (published_event?.type != "published") {
   process.exit(1);
 }
@@ -102,9 +102,9 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 await wait(2500);
 
 // Créer une raffle et stocker l'adresse dans deployed_addresses
-const raffle_tx = new TransactionBlock();
-const [payment] = raffle_tx.splitCoins(raffle_tx.gas, [
-  raffle_tx.pure(10_000_000_000), // 10 SUI
+const raffle_tx = new Transaction();
+const [reward] = raffle_tx.splitCoins(raffle_tx.gas, [
+  10_000_000_000n, // 10 SUI
 ]);
 const end_date = Date.now() + 1000 * 60 * 60 * 24 * 7;
 const min_tickets = 6;
@@ -113,19 +113,24 @@ const ticket_price = 2_000_000_000; // 2 SUI
 
 raffle_tx.moveCall({
   target: `${package_id}::raffles::create_raffle`,
+  typeArguments: ["0x2::sui::SUI", "0x2::sui::SUI"],
   arguments: [
-    raffle_tx.object(SUI_CLOCK_OBJECT_ID),
-    raffle_tx.object(payment),
-    raffle_tx.pure(end_date),
-    raffle_tx.pure(min_tickets),
-    raffle_tx.pure(max_tickets),
-    raffle_tx.pure(ticket_price),
+    raffle_tx.sharedObjectRef({
+      objectId: SUI_CLOCK_OBJECT_ID,
+      initialSharedVersion: 1,
+      mutable: false,
+    }),
+    reward,
+    raffle_tx.pure(bcs.u64().serialize(BigInt(ticket_price)).toBytes()),
+    raffle_tx.pure(bcs.u64().serialize(BigInt(end_date)).toBytes()),
+    raffle_tx.pure(bcs.u64().serialize(BigInt(min_tickets)).toBytes()),
+    raffle_tx.pure(bcs.u64().serialize(BigInt(max_tickets)).toBytes()),
   ],
 });
 
-const txData = await client.signAndExecuteTransactionBlock({
+const txData = await client.signAndExecuteTransaction({
+  transaction: raffle_tx,
   signer: keypair,
-  transactionBlock: raffle_tx,
   options: {
     showBalanceChanges: true,
     showEffects: true,
@@ -143,7 +148,7 @@ if (!txData.objectChanges) {
 
 const raffle_id = find_one_by_type(
   txData.objectChanges,
-  `${package_id}::raffles::Raffle`,
+  `${package_id}::raffles::Raffle<0x2::sui::SUI, 0x2::sui::SUI>`,
 );
 
 deployed_addresses = Object.assign(deployed_addresses, {

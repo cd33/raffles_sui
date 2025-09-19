@@ -1,7 +1,7 @@
-import { PaginatedEvents } from "@mysten/sui.js/client";
-import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui.js/utils";
 import type { SuiClient } from "@mysten/sui/client";
+import { PaginatedEvents } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
 import { PACKAGE_ID } from "../deployed_addresses.json";
 
 export type RaffleType = {

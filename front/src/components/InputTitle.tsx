@@ -1,4 +1,4 @@
-import { Flex } from "@radix-ui/themes";
+import React from "react";
 
 interface InputTitleProps extends React.InputHTMLAttributes<HTMLInputElement> {
   title: string;
@@ -6,9 +6,13 @@ interface InputTitleProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export function InputTitle({ title, ...props }: InputTitleProps) {
   return (
-    <Flex direction="column" gap="2">
-      <p>{title}</p>
-      <input {...props} />
-    </Flex>
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-800">{title}</label>
+      <input
+        className="w-full text-gray-900 border-gray-300 focus:ring focus:ring-blue-500 border rounded-md px-3 py-2"
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        {...props}
+      />
+    </div>
   );
 }

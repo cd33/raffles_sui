@@ -96,7 +96,10 @@ public fun buy_ticket<Reward, Payment>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!((raffle.end_date > clock::timestamp_ms(clock) && raffle.status == IN_PROGRESS), ERaffleExpired);
+    assert!(
+        (raffle.end_date > clock::timestamp_ms(clock) && raffle.status == IN_PROGRESS),
+        ERaffleExpired,
+    );
     assert!(amount_tickets > 0 && coin::value(&payment) > 0, EInvalidTicketCount);
     assert!(coin::value(&payment) >= amount_tickets * raffle.ticket_price, EInsufficientPayment);
     assert!(

@@ -1,4 +1,4 @@
-import { Flex, Select } from "@radix-ui/themes";
+import React from "react";
 
 export function SelectTitle({
   title,
@@ -12,23 +12,19 @@ export function SelectTitle({
   setter: React.Dispatch<React.SetStateAction<string>>;
 }) {
   return (
-    <Flex direction="column" gap="2">
-      <p>{title}</p>
-      <Select.Root
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-800">{title}</label>
+      <select
+        className="w-full text-gray-900 border-gray-300 focus:ring focus:ring-blue-500 border rounded-md px-3 py-2"
         defaultValue={defaultValue ?? items[0]}
-        onValueChange={setter}
+        onChange={(e) => setter(e.target.value)}
       >
-        <Select.Trigger />
-        <Select.Content>
-          <Select.Group>
-            {items.map((item) => (
-              <Select.Item key={item} value={item}>
-                {item}
-              </Select.Item>
-            ))}
-          </Select.Group>
-        </Select.Content>
-      </Select.Root>
-    </Flex>
+        {items.map((item) => (
+          <option key={item} value={item} className="bg-gray-100 text-gray-900">
+            {item}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

@@ -1,8 +1,5 @@
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
-import { Container } from "@radix-ui/themes";
+import { useSuiClient } from "@mysten/dapp-kit";
 import { useEffect, useState } from "react";
-import { CreateRaffle } from "./components/CreateRaffle";
-import { Navbar } from "./components/Navbar";
 import { Raffles } from "./Raffles";
 import {
   get_datas,
@@ -12,7 +9,6 @@ import {
 
 function App() {
   const suiClient = useSuiClient();
-  const account = useCurrentAccount();
   const [raffles, setRaffles] = useState<RaffleType[]>([]);
 
   const getRaffles = async () => {
@@ -28,57 +24,15 @@ function App() {
   }, []);
 
   return (
-    <>
-      <Navbar title="Raffles" />
-
-      <Container>
-        <Container>
-          <h2 style={{ textAlign: "center", marginTop: "16px" }}>My Raffles</h2>
-          <Raffles
-            raffles={raffles.filter(
-              (raffle) => raffle.owner === account?.address,
-            )}
-            getRaffles={getRaffles}
-          />
-        </Container>
-
-        <span
-          style={{
-            display: "block",
-            width: "100%",
-            height: "1px",
-            backgroundColor: "white",
-            marginTop: "24px",
-            marginBottom: "16px",
-          }}
-        />
-
-        <Container>
-          <h2 style={{ textAlign: "center" }}>All Raffles</h2>
-          <Raffles
-            raffles={raffles.filter(
-              (raffle) => raffle.owner !== account?.address,
-            )}
-            getRaffles={getRaffles}
-          />
-        </Container>
-
-        <span
-          style={{
-            display: "block",
-            width: "100%",
-            height: "1px",
-            backgroundColor: "white",
-            marginTop: "24px",
-            marginBottom: "16px",
-          }}
-        />
-
-        <Container mb="8">
-          <CreateRaffle getRaffles={getRaffles} />
-        </Container>
-      </Container>
-    </>
+    <div className="mx-auto px-4 py-8 space-y-12">
+      <section>
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold mb-2">🌟 All Raffles</h2>
+          <p className="text-gray-400">Discover and join exciting raffles</p>
+        </div>
+        <Raffles raffles={raffles} getRaffles={getRaffles} />
+      </section>
+    </div>
   );
 }
 
