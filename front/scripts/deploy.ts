@@ -91,9 +91,18 @@ if (!admin_cap_id) {
   process.exit(1);
 }
 
+const usdt_treasury_type = `0x2::coin::TreasuryCap<${package_id}::mock_usdt::MOCK_USDT>`;
+const usdc_treasury_type = `0x2::coin::TreasuryCap<${package_id}::mock_usdc::MOCK_USDC>`;
+const usdt_treasury_id = find_one_by_type(objectChanges, usdt_treasury_type);
+const usdc_treasury_id = find_one_by_type(objectChanges, usdc_treasury_type);
+
 let deployed_addresses = {
   PACKAGE_ID: package_id,
   ADMIN_CAP: admin_cap_id,
+  MOCK_USDT_TREASURY: usdt_treasury_id,
+  MOCK_USDC_TREASURY: usdc_treasury_id,
+  MOCK_USDT_TYPE: `${package_id}::mock_usdt::MOCK_USDT`,
+  MOCK_USDC_TYPE: `${package_id}::mock_usdc::MOCK_USDC`,
 };
 console.log("deployed_addresses", deployed_addresses);
 
@@ -101,7 +110,58 @@ console.log("deployed_addresses", deployed_addresses);
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 await wait(2500);
 
+// Mint des tokens mock pour les tests
+if (usdt_treasury_id && usdc_treasury_id) {
+  console.log("Minting both MOCK tokens...");
+
+  // Créer une seule transaction pour minter les deux tokens
+  const mint_tokens_tx = new Transaction();
+
+  // Mint MOCK_USDT
+  mint_tokens_tx.moveCall({
+    target: `${package_id}::mock_usdt::mint`,
+    arguments: [
+      mint_tokens_tx.object(usdt_treasury_id),
+      mint_tokens_tx.pure(
+        bcs
+          .u64()
+          .serialize(1000000n * 1000000n)
+          .toBytes(),
+      ), // 1M USDT avec 6 décimales
+      mint_tokens_tx.pure.address(keypair.toSuiAddress()),
+    ],
+  });
+
+  // Mint MOCK_USDC dans la même transaction
+  mint_tokens_tx.moveCall({
+    target: `${package_id}::mock_usdc::mint`,
+    arguments: [
+      mint_tokens_tx.object(usdc_treasury_id),
+      mint_tokens_tx.pure(
+        bcs
+          .u64()
+          .serialize(1000000n * 1000000n)
+          .toBytes(),
+      ), // 1M USDC avec 6 décimales
+      mint_tokens_tx.pure.address(keypair.toSuiAddress()),
+    ],
+  });
+
+  await client.signAndExecuteTransaction({
+    transaction: mint_tokens_tx,
+    signer: keypair,
+    options: {
+      showEffects: true,
+    },
+  });
+  console.log("✅ Minted 1,000,000 MOCK_USDT and 1,000,000 MOCK_USDC");
+} else {
+  console.log("⚠️ Treasury Caps not found, skipping token minting");
+}
+
+await wait(2500);
 // Créer une raffle et stocker l'adresse dans deployed_addresses
+console.log("Creating demo raffle...");
 const raffle_tx = new Transaction();
 const [reward] = raffle_tx.splitCoins(raffle_tx.gas, [
   10_000_000_000n, // 10 SUI
@@ -154,7 +214,9 @@ const raffle_id = find_one_by_type(
 deployed_addresses = Object.assign(deployed_addresses, {
   RAFFLE: raffle_id,
 });
-console.log("deployed_addresses", deployed_addresses);
+
+console.log("✅ Demo raffle created:", raffle_id);
+console.log("🎯 All contracts deployed successfully!");
 
 console.log("Writing addresses to json...");
 const path_to_address_file = path.join(

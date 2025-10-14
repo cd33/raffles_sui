@@ -1,16 +1,25 @@
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSuiClient,
 } from "@mysten/dapp-kit";
 import { SUI_DECIMALS } from "@mysten/sui/utils";
 import { ChangeEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InputTitle } from "../components/InputTitle";
 import { SelectTitle } from "../components/SelectTitle";
-import { create_raffle_tx } from "../utils/functions";
+import {
+  getMockCoinsConfig,
+  getProductionCoinsConfig,
+} from "../config/mockTokens";
+import { createRaffleTransaction, USD_DECIMALS } from "../utils/functions";
 
 const oneDay = 1000 * 60 * 60 * 24;
-const coins = ["SUI", "USDT", "USDC"];
+
+const USE_MOCK_TOKENS = import.meta.env.VITE_USE_MOCK_TOKENS === "true";
+const coins = USE_MOCK_TOKENS
+  ? getMockCoinsConfig()
+  : getProductionCoinsConfig();
 
 const handleAmounts = (e: ChangeEvent<HTMLInputElement>) => {
   const number = Number(e.currentTarget.value);
@@ -22,6 +31,7 @@ function CreateRafflePage() {
   const navigate = useNavigate();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const [rewardCoin, setRewardCoin] = useState(coins[0]);
   const [reward, setReward] = useState(1);
   const [end_date, setEndDate] = useState(Date.now() + oneDay * 7);
@@ -31,30 +41,45 @@ function CreateRafflePage() {
   const [ticketType, setTicketType] = useState(coins[0]);
 
   const createRaffle = async () => {
-    signAndExecute(
-      {
-        transaction: create_raffle_tx(
-          reward * 10 ** SUI_DECIMALS,
-          end_date,
-          min_tickets,
-          max_tickets,
-          ticket_price * 10 ** SUI_DECIMALS,
-        ),
-      },
-      {
-        onSuccess: () => {
-          navigate("/my-raffles");
+    if (!account?.address) {
+      console.error("No account connected");
+      return;
+    }
+
+    try {
+      const transaction = await createRaffleTransaction(
+        suiClient,
+        account.address,
+        reward *
+          10 ** (rewardCoin.name === "SUI" ? SUI_DECIMALS : USD_DECIMALS),
+        end_date,
+        min_tickets,
+        max_tickets,
+        ticket_price *
+          10 ** (ticketType.name === "SUI" ? SUI_DECIMALS : USD_DECIMALS),
+        rewardCoin.address,
+        ticketType.address,
+      );
+
+      signAndExecute(
+        { transaction },
+        {
+          onSuccess: () => {
+            navigate("/my-raffles");
+          },
+          onError: (error) => {
+            console.error(error);
+            setReward(1);
+            setEndDate(Date.now() + oneDay * 7);
+            setMinTickets(5);
+            setMaxTickets(10);
+            setTicketPrice(1);
+          },
         },
-        onError: (error) => {
-          console.error(error);
-        },
-      },
-    );
-    setReward(0);
-    setEndDate(Date.now());
-    setMinTickets(0);
-    setMaxTickets(0);
-    setTicketPrice(0);
+      );
+    } catch (error) {
+      console.error("Failed to create transaction:", error);
+    }
   };
 
   return (

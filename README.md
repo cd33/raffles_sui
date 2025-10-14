@@ -39,6 +39,23 @@ sui client switch --env local
 sui client faucet
 ```
 
+## Lancer le front (après avoir démarrer le local network)
+
+```sh
+cd front
+pnpm run deploy
+pnpm dev
+```
+
+## Seed le wallet 2
+
+```sh
+sui client switch --address 0x7097cf9a9a572cb87a74c2c0f114d61792a17d6bd7e8eafa2796b1c49e32b741
+sui client faucet
+npx tsx scripts/mint-mock-tokens.ts
+sui client switch --address 0x265eefb3bf8772b66049769ff4ad7b582d0e3cbeffffc9930c16d81339b3a0b8
+```
+
 ## Compiler
 
 ```sh
@@ -61,15 +78,13 @@ sui move coverage source --module raffles
 
 ## TODO
 
-- mettre à jour le front et faire tout fonctionner
-
-- tests: faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
+- ajouter les NFTs
+- adapter le front
 - ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - ajouter tax sur les redeem (seulement les success ?)
 - adapter le front
-- ajouter les NFTs
-- adapter le front
-- Mettre en ligne avec Vercel
+- tests: faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
+- Mettre en ligne avec une alternative à Vercel
 
 ## Futur
 

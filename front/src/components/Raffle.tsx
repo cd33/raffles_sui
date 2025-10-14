@@ -1,17 +1,28 @@
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSuiClient,
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/dist/cjs/transactions";
 import { formatAddress, SUI_DECIMALS } from "@mysten/sui/utils";
-import React, { useState } from "react";
+import { ChangeEvent, useState } from "react";
 import {
-  buy_ticket,
+  getMockCoinsConfig,
+  getProductionCoinsConfig,
+} from "../config/mockTokens";
+import {
+  createBuyTicketTransaction,
   determine_winner,
   RaffleType,
   redeem,
   redeem_owner,
+  USD_DECIMALS,
 } from "../utils/functions";
+
+const USE_MOCK_TOKENS = import.meta.env.VITE_USE_MOCK_TOKENS === "true";
+const coins = USE_MOCK_TOKENS
+  ? getMockCoinsConfig()
+  : getProductionCoinsConfig();
 
 export function Raffle({
   raffle,
@@ -21,18 +32,25 @@ export function Raffle({
   getRaffles: () => Promise<void>;
 }) {
   const account = useCurrentAccount();
+  const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [amountTicket, setAmountTicket] = useState(1);
   const raffleAddress = raffle.id.id;
   const endDate = raffle.end_date;
+  const rewardType = coins.find(
+    (coin) => coin.address === raffle.reward_type,
+  )?.name;
+  const paymentType = coins.find(
+    (coin) => coin.address === raffle.payment_type,
+  )?.name;
 
-  const handleTicketAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTicketAmountChange = (e: ChangeEvent<HTMLInputElement>) => {
     const number = Number(e.currentTarget.value);
     const value =
       number < 1
         ? 1
-        : number > raffle.max_tickets
-          ? raffle.max_tickets
+        : number > Number(raffle.max_tickets)
+          ? Number(raffle.max_tickets)
           : number;
     setAmountTicket(value);
   };
@@ -53,26 +71,44 @@ export function Raffle({
     );
   };
 
-  const buyTicket = () => {
-    executeTransaction(
-      buy_ticket(
+  const buyTicket = async () => {
+    if (!account?.address || !raffle.reward_type || !raffle.payment_type) {
+      console.error("Missing required data for transaction");
+      return;
+    }
+
+    try {
+      const transaction = await createBuyTicketTransaction(
+        suiClient,
+        account.address,
         raffleAddress,
         amountTicket,
         amountTicket * raffle.ticket_price,
-      ),
-    );
+        raffle.reward_type,
+        raffle.payment_type,
+      );
+      executeTransaction(transaction);
+    } catch (error) {
+      console.error("Failed to create buy ticket transaction:", error);
+    }
   };
 
   const determineWinner = () => {
-    executeTransaction(determine_winner(raffleAddress));
+    executeTransaction(
+      determine_winner(raffleAddress, raffle.reward_type, raffle.payment_type),
+    );
   };
 
   const redeemReward = () => {
-    executeTransaction(redeem(raffleAddress));
+    executeTransaction(
+      redeem(raffleAddress, raffle.reward_type, raffle.payment_type),
+    );
   };
 
   const redeemRewardOwner = () => {
-    executeTransaction(redeem_owner(raffleAddress));
+    executeTransaction(
+      redeem_owner(raffleAddress, raffle.reward_type, raffle.payment_type),
+    );
   };
 
   const getStatusColor = (status: number) => {
@@ -108,7 +144,10 @@ export function Raffle({
         <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
           <span className="text-3xl">🏆</span>
           <span className="text-2xl font-bold text-yellow-400">
-            {raffle.reward / 10 ** SUI_DECIMALS} SUI
+            {rewardType === "SUI"
+              ? raffle.reward / 10 ** SUI_DECIMALS
+              : raffle.reward / 10 ** USD_DECIMALS}{" "}
+            {rewardType}
           </span>
         </div>
       </div>
@@ -148,7 +187,10 @@ export function Raffle({
               💰 Price
             </div>
             <div className="text-lg font-bold text-green-400">
-              {raffle.ticket_price / 10 ** SUI_DECIMALS} SUI
+              {paymentType === "SUI"
+                ? raffle.ticket_price / 10 ** SUI_DECIMALS
+                : raffle.ticket_price / 10 ** USD_DECIMALS}{" "}
+              {paymentType}
             </div>
           </div>
         </div>
@@ -182,7 +224,7 @@ export function Raffle({
 
       {/* Action buttons */}
       <div className="space-y-4">
-        {raffle.participants.length !== raffle.max_tickets &&
+        {raffle.participants.length !== Number(raffle.max_tickets) &&
           raffle.status === 0 && (
             <div className="bg-white/5 backdrop-blur-sm p-4 rounded-lg border border-white/10">
               <div className="flex items-center space-x-3 mb-3">
@@ -209,7 +251,7 @@ export function Raffle({
 
         {raffle.status === 0 &&
           (endDate < Date.now() / 1000 ||
-            raffle.participants.length === raffle.max_tickets) && (
+            raffle.participants.length === Number(raffle.max_tickets)) && (
             <button
               className="cursor-pointer w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
               onClick={determineWinner}
@@ -220,13 +262,14 @@ export function Raffle({
 
         {raffle.status !== 0 && (
           <div className="space-y-3">
-            <button
-              className="cursor-pointer w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
-              onClick={redeemRewardOwner}
-            >
-              💰 Redeem Owner Reward
-            </button>
-            {raffle.owner === account?.address && (
+            {raffle.owner === account?.address ? (
+              <button
+                className="cursor-pointer w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
+                onClick={redeemRewardOwner}
+              >
+                💰 Redeem Owner Reward
+              </button>
+            ) : (
               <button
                 className="cursor-pointer w-full px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
                 onClick={redeemReward}

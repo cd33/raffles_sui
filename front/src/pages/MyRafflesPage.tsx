@@ -24,6 +24,30 @@ function MyRafflesPage() {
     getRaffles();
   }, []);
 
+  // const [usdt, setUsdt] = useState<bigint | null>(null);
+  // const [usdc, setUsdc] = useState<bigint | null>(null);
+  // useEffect(() => {
+  //   const fetchUsd = async () => {
+  //     if (account?.address) {
+  //       const balanceUSDT = await getTotalBalance(
+  //         suiClient,
+  //         account.address,
+  //         coins[1].address,
+  //       );
+  //       setUsdt(balanceUSDT);
+  //       const balanceUSDC = await getTotalBalance(
+  //         suiClient,
+  //         account.address,
+  //         coins[2].address,
+  //       );
+  //       setUsdc(balanceUSDC);
+  //     }
+  //   };
+  //   fetchUsd();
+  // }, [account, suiClient]);
+  // console.log("usdc", usdc);
+  // console.log("usdt", usdt);
+
   return (
     <div className="mx-auto px-4 py-8 space-y-12">
       <section>

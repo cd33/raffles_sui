@@ -1,6 +1,6 @@
-import React from "react";
+import { InputHTMLAttributes } from "react";
 
-interface InputTitleProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputTitleProps extends InputHTMLAttributes<HTMLInputElement> {
   title: string;
 }
 
