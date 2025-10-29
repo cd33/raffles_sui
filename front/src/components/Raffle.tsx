@@ -11,10 +11,15 @@ import {
   getProductionCoinsConfig,
 } from "../config/mockTokens";
 import {
+  buy_nft_ticket,
+  buy_ticket,
   createBuyTicketTransaction,
+  determine_nft_winner,
   determine_winner,
   RaffleType,
   redeem,
+  redeem_nft,
+  redeem_nft_owner,
   redeem_owner,
   USD_DECIMALS,
 } from "../utils/functions";
@@ -86,7 +91,9 @@ export function Raffle({
         amountTicket * raffle.ticket_price,
         raffle.reward_type,
         raffle.payment_type,
+        raffle.is_nft_raffle ? buy_nft_ticket : buy_ticket,
       );
+
       executeTransaction(transaction);
     } catch (error) {
       console.error("Failed to create buy ticket transaction:", error);
@@ -94,21 +101,66 @@ export function Raffle({
   };
 
   const determineWinner = () => {
-    executeTransaction(
-      determine_winner(raffleAddress, raffle.reward_type, raffle.payment_type),
-    );
+    if (!raffle.reward_type || !raffle.payment_type) {
+      console.error("Missing reward_type or payment_type");
+      return;
+    }
+
+    if (raffle.is_nft_raffle) {
+      executeTransaction(
+        determine_nft_winner(
+          raffleAddress,
+          raffle.reward_type,
+          raffle.payment_type,
+        ),
+      );
+    } else {
+      executeTransaction(
+        determine_winner(
+          raffleAddress,
+          raffle.reward_type,
+          raffle.payment_type,
+        ),
+      );
+    }
   };
 
   const redeemReward = () => {
-    executeTransaction(
-      redeem(raffleAddress, raffle.reward_type, raffle.payment_type),
-    );
+    if (!raffle.reward_type || !raffle.payment_type) {
+      console.error("Missing reward_type or payment_type");
+      return;
+    }
+
+    if (raffle.is_nft_raffle) {
+      executeTransaction(
+        redeem_nft(raffleAddress, raffle.reward_type, raffle.payment_type),
+      );
+    } else {
+      executeTransaction(
+        redeem(raffleAddress, raffle.reward_type, raffle.payment_type),
+      );
+    }
   };
 
   const redeemRewardOwner = () => {
-    executeTransaction(
-      redeem_owner(raffleAddress, raffle.reward_type, raffle.payment_type),
-    );
+    if (!raffle.reward_type || !raffle.payment_type) {
+      console.error("Missing reward_type or payment_type");
+      return;
+    }
+
+    if (raffle.is_nft_raffle) {
+      executeTransaction(
+        redeem_nft_owner(
+          raffleAddress,
+          raffle.reward_type,
+          raffle.payment_type,
+        ),
+      );
+    } else {
+      executeTransaction(
+        redeem_owner(raffleAddress, raffle.reward_type, raffle.payment_type),
+      );
+    }
   };
 
   const getStatusColor = (status: number) => {
@@ -141,15 +193,41 @@ export function Raffle({
     <div className="w-full max-w-md mx-auto">
       {/* Header with reward */}
       <div className="text-center mb-6">
-        <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
-          <span className="text-3xl">🏆</span>
-          <span className="text-2xl font-bold text-yellow-400">
-            {rewardType === "SUI"
-              ? raffle.reward / 10 ** SUI_DECIMALS
-              : raffle.reward / 10 ** USD_DECIMALS}{" "}
-            {rewardType}
-          </span>
-        </div>
+        {raffle.is_nft_raffle && raffle.nft_reward ? (
+          <div className="bg-gradient-to-r from-purple-400/20 to-pink-500/20 px-6 py-4 rounded-xl border border-purple-400/30">
+            <div className="flex flex-col items-center space-y-3">
+              <span className="text-3xl">🖼️</span>
+              {raffle.nft_reward.image_url && (
+                <img
+                  src={raffle.nft_reward.image_url}
+                  alt={raffle.nft_reward.name}
+                  className="w-20 h-20 object-cover rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              )}
+              <div className="text-lg font-bold text-purple-400">
+                {raffle.nft_reward.name}
+              </div>
+              {raffle.nft_reward.description && (
+                <div className="text-sm text-gray-300 text-center max-w-xs">
+                  {raffle.nft_reward.description}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
+            <span className="text-3xl">🏆</span>
+            <span className="text-2xl font-bold text-yellow-400">
+              {rewardType === "SUI"
+                ? raffle.reward / 10 ** SUI_DECIMALS
+                : raffle.reward / 10 ** USD_DECIMALS}{" "}
+              {rewardType}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Main info cards */}

@@ -93,16 +93,20 @@ if (!admin_cap_id) {
 
 const usdt_treasury_type = `0x2::coin::TreasuryCap<${package_id}::mock_usdt::MOCK_USDT>`;
 const usdc_treasury_type = `0x2::coin::TreasuryCap<${package_id}::mock_usdc::MOCK_USDC>`;
+const nft_collection_type = `${package_id}::mock_nft::CollectionCap`;
 const usdt_treasury_id = find_one_by_type(objectChanges, usdt_treasury_type);
 const usdc_treasury_id = find_one_by_type(objectChanges, usdc_treasury_type);
+const nft_collection_id = find_one_by_type(objectChanges, nft_collection_type);
 
 let deployed_addresses = {
   PACKAGE_ID: package_id,
   ADMIN_CAP: admin_cap_id,
   MOCK_USDT_TREASURY: usdt_treasury_id,
   MOCK_USDC_TREASURY: usdc_treasury_id,
+  MOCK_NFT_COLLECTION: nft_collection_id,
   MOCK_USDT_TYPE: `${package_id}::mock_usdt::MOCK_USDT`,
   MOCK_USDC_TYPE: `${package_id}::mock_usdc::MOCK_USDC`,
+  MOCK_NFT_TYPE: `${package_id}::mock_nft::MockNFT`,
 };
 console.log("deployed_addresses", deployed_addresses);
 
@@ -157,6 +161,74 @@ if (usdt_treasury_id && usdc_treasury_id) {
   console.log("✅ Minted 1,000,000 MOCK_USDT and 1,000,000 MOCK_USDC");
 } else {
   console.log("⚠️ Treasury Caps not found, skipping token minting");
+}
+
+await wait(2500);
+
+// Mint des NFTs mock pour les tests
+if (nft_collection_id) {
+  console.log("Minting 5 MOCK NFTs...");
+
+  const nft_names = [
+    "Epic Dragon",
+    "Mystic Phoenix",
+    "Crystal Unicorn",
+    "Shadow Wolf",
+    "Golden Eagle",
+  ];
+
+  const nft_descriptions = [
+    "A legendary dragon with ancient powers",
+    "A mystical phoenix that rises from ashes",
+    "A rare unicorn with crystal horn",
+    "A mysterious wolf from the shadow realm",
+    "A majestic golden eagle soaring high",
+  ];
+
+  const nft_images = [
+    "https://example.com/dragon.png",
+    "https://example.com/phoenix.png",
+    "https://example.com/unicorn.png",
+    "https://example.com/wolf.png",
+    "https://example.com/eagle.png",
+  ];
+
+  const nft_attributes = [
+    '{"rarity":"legendary","element":"fire","power":95}',
+    '{"rarity":"epic","element":"fire","power":90}',
+    '{"rarity":"rare","element":"light","power":85}',
+    '{"rarity":"uncommon","element":"dark","power":80}',
+    '{"rarity":"epic","element":"air","power":88}',
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    const mint_nft_tx = new Transaction();
+
+    mint_nft_tx.moveCall({
+      target: `${package_id}::mock_nft::mint_nft`,
+      arguments: [
+        mint_nft_tx.object(nft_collection_id),
+        mint_nft_tx.pure.string(nft_names[i]),
+        mint_nft_tx.pure.string(nft_descriptions[i]),
+        mint_nft_tx.pure.string(nft_images[i]),
+        mint_nft_tx.pure.string(nft_attributes[i]),
+        mint_nft_tx.pure.address(keypair.toSuiAddress()),
+      ],
+    });
+
+    await client.signAndExecuteTransaction({
+      transaction: mint_nft_tx,
+      signer: keypair,
+      options: {
+        showEffects: true,
+      },
+    });
+
+    console.log(`✅ Minted NFT ${i + 1}/5: ${nft_names[i]}`);
+    await wait(500); // Petite pause entre chaque mint
+  }
+} else {
+  console.log("⚠️ NFT Collection Cap not found, skipping NFT minting");
 }
 
 await wait(2500);

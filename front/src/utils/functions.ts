@@ -18,6 +18,13 @@ export type RaffleType = {
   status: number;
   reward_type?: string;
   payment_type?: string;
+  is_nft_raffle?: boolean;
+  nft_reward?: {
+    id: string;
+    name?: string;
+    description?: string;
+    image_url?: string;
+  };
 };
 
 export const USD_DECIMALS = 6;
@@ -40,13 +47,46 @@ export const get_datas = async (id: string, suiClient: SuiClient) => {
   const objectType = res?.data?.type;
   let reward_type = "0x2::sui::SUI";
   let payment_type = "0x2::sui::SUI";
+  let is_nft_raffle = false;
+  let nft_reward = undefined;
 
-  if (objectType && objectType.includes("Raffle<")) {
-    // Extraire les types entre les <...>
-    const typeMatch = objectType.match(/Raffle<([^,]+),\s*([^>]+)>/);
-    if (typeMatch) {
-      reward_type = typeMatch[1].trim();
-      payment_type = typeMatch[2].trim();
+  if (objectType) {
+    if (objectType.includes("NFTRaffle<")) {
+      is_nft_raffle = true;
+      const typeMatch = objectType.match(/NFTRaffle<([^,]+),\s*([^>]+)>/);
+      if (typeMatch) {
+        reward_type = typeMatch[1].trim();
+        payment_type = typeMatch[2].trim();
+      }
+
+      // Extraire les infos du NFT si disponible
+      if (fields.reward && typeof fields.reward === "object") {
+        const rewardFields = fields.reward as {
+          fields?: {
+            id?: { id: string };
+            name?: string;
+            description?: string;
+            image_url?: string;
+          };
+        };
+        if (rewardFields.fields) {
+          const nftFields = rewardFields.fields;
+          if (nftFields) {
+            nft_reward = {
+              id: nftFields.id?.id || "",
+              name: nftFields.name || "Unknown NFT",
+              description: nftFields.description || "",
+              image_url: nftFields.image_url || "",
+            };
+          }
+        }
+      }
+    } else if (objectType.includes("Raffle<")) {
+      const typeMatch = objectType.match(/Raffle<([^,]+),\s*([^>]+)>/);
+      if (typeMatch) {
+        reward_type = typeMatch[1].trim();
+        payment_type = typeMatch[2].trim();
+      }
     }
   }
 
@@ -54,7 +94,40 @@ export const get_datas = async (id: string, suiClient: SuiClient) => {
     ...fields,
     reward_type,
     payment_type,
+    is_nft_raffle,
+    nft_reward,
   };
+};
+
+export const create_nft_raffle_tx = (
+  nft_id: string,
+  nft_type: string,
+  end_date: number,
+  min_tickets: number,
+  max_tickets: number,
+  ticket_price: number,
+  payment_type: string = "0x2::sui::SUI",
+) => {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::create_nft_raffle`,
+    typeArguments: [nft_type, payment_type],
+    arguments: [
+      tx.sharedObjectRef({
+        objectId: SUI_CLOCK_OBJECT_ID,
+        initialSharedVersion: 1,
+        mutable: false,
+      }),
+      tx.object(nft_id),
+      tx.pure.u64(ticket_price),
+      tx.pure.u64(end_date),
+      tx.pure.u64(min_tickets),
+      tx.pure.u64(max_tickets),
+    ],
+  });
+
+  return tx;
 };
 
 export const create_raffle_tx = (
@@ -295,12 +368,24 @@ export const redeem_owner = (
 };
 
 export const get_raffle_created_events = async (suiClient: SuiClient) => {
-  const events: PaginatedEvents = await suiClient.queryEvents({
+  // Récupérer les événements RaffleCreated
+  const raffleEvents: PaginatedEvents = await suiClient.queryEvents({
     query: {
       MoveEventType: `${PACKAGE_ID}::raffles::RaffleCreated`,
     },
   });
-  return events.data.map((event) => (event.parsedJson as { id: string }).id);
+
+  // Récupérer les événements NFTRaffleCreated
+  const nftRaffleEvents: PaginatedEvents = await suiClient.queryEvents({
+    query: {
+      MoveEventType: `${PACKAGE_ID}::raffles::NFTRaffleCreated`,
+    },
+  });
+
+  // Combiner les deux listes d'événements
+  const allEvents = [...raffleEvents.data, ...nftRaffleEvents.data];
+
+  return allEvents.map((event) => (event.parsedJson as { id: string }).id);
 };
 
 // Fonction pour récupérer les coins d'un type spécifique appartenant à une adresse
@@ -341,10 +426,18 @@ export const createBuyTicketTransaction = async (
   price: number,
   reward_type: string,
   payment_type: string,
+  callback: (
+    raffle_address: string,
+    amount_tickets: number,
+    price: number,
+    reward_type: string,
+    payment_type: string,
+    payment_coins?: string[],
+  ) => Transaction = buy_ticket,
 ) => {
   if (payment_type === "0x2::sui::SUI") {
     // Pour SUI, pas besoin de récupérer les coins explicitement
-    return buy_ticket(
+    return callback(
       raffle_address,
       amount_tickets,
       price,
@@ -373,7 +466,7 @@ export const createBuyTicketTransaction = async (
     }
 
     const coinIds = userCoins.map((coin) => coin.coinObjectId);
-    return buy_ticket(
+    return callback(
       raffle_address,
       amount_tickets,
       price,
@@ -381,5 +474,186 @@ export const createBuyTicketTransaction = async (
       payment_type,
       coinIds,
     );
+  }
+};
+
+export type NFTType = {
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+  image_url: string;
+  display?: Record<string, string> | null;
+};
+
+export const createNFTRaffleTransaction = (
+  nft_id: string,
+  nft_type: string,
+  end_date: number,
+  min_tickets: number,
+  max_tickets: number,
+  ticket_price: number,
+  payment_type: string,
+) => {
+  return create_nft_raffle_tx(
+    nft_id,
+    nft_type,
+    end_date,
+    min_tickets,
+    max_tickets,
+    ticket_price,
+    payment_type,
+  );
+};
+
+// Fonctions spécifiques aux raffles NFT
+export const buy_nft_ticket = (
+  raffle_address: string,
+  amount_tickets: number,
+  price: number,
+  nft_type: string,
+  payment_type: string,
+  payment_coins?: string[],
+) => {
+  const tx = new Transaction();
+
+  let payment;
+  if (payment_type === "0x2::sui::SUI") {
+    [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(price)]);
+  } else {
+    if (!payment_coins || payment_coins.length === 0) {
+      throw new Error(
+        `Payment coins required for non-SUI payment type: ${payment_type}`,
+      );
+    }
+    const primaryCoin = tx.object(payment_coins[0]);
+    if (payment_coins.length > 1) {
+      const otherCoins = payment_coins.slice(1).map((id) => tx.object(id));
+      tx.mergeCoins(primaryCoin, otherCoins);
+    }
+    [payment] = tx.splitCoins(primaryCoin, [tx.pure.u64(price)]);
+  }
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::buy_nft_ticket`,
+    typeArguments: [nft_type, payment_type],
+    arguments: [
+      tx.object(raffle_address),
+      tx.pure.u64(amount_tickets),
+      payment,
+      tx.sharedObjectRef({
+        objectId: SUI_CLOCK_OBJECT_ID,
+        initialSharedVersion: 1,
+        mutable: false,
+      }),
+    ],
+  });
+
+  return tx;
+};
+
+export const determine_nft_winner = (
+  raffle_address: string,
+  nft_type: string,
+  payment_type: string,
+) => {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::determine_nft_winner`,
+    typeArguments: [nft_type, payment_type],
+    arguments: [
+      tx.object(raffle_address),
+      tx.sharedObjectRef({
+        objectId: "0x8",
+        initialSharedVersion: 1,
+        mutable: false,
+      }),
+      tx.sharedObjectRef({
+        objectId: SUI_CLOCK_OBJECT_ID,
+        initialSharedVersion: 1,
+        mutable: false,
+      }),
+    ],
+  });
+
+  return tx;
+};
+
+export const redeem_nft = (
+  raffle_address: string,
+  nft_type: string,
+  payment_type: string,
+) => {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::redeem_nft`,
+    typeArguments: [nft_type, payment_type],
+    arguments: [tx.object(raffle_address)],
+  });
+
+  return tx;
+};
+
+export const redeem_nft_owner = (
+  raffle_address: string,
+  nft_type: string,
+  payment_type: string,
+) => {
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::raffles::redeem_nft_owner`,
+    typeArguments: [nft_type, payment_type],
+    arguments: [tx.object(raffle_address)],
+  });
+
+  return tx;
+};
+
+export const getUserNFTs = async (
+  suiClient: SuiClient,
+  userAddress: string,
+): Promise<NFTType[]> => {
+  try {
+    const objects = await suiClient.getOwnedObjects({
+      owner: userAddress,
+      filter: {
+        StructType: `${PACKAGE_ID}::mock_nft::MockNFT`,
+      },
+      options: {
+        showContent: true,
+        showDisplay: true,
+        showType: true,
+      },
+    });
+
+    return objects.data
+      .filter((obj) => obj.data?.content && obj.data?.objectId)
+      .map((obj) => {
+        const content = obj.data!.content as {
+          dataType: string;
+          fields: {
+            name?: string;
+            description?: string;
+            image_url?: string;
+          };
+        };
+        const display = obj.data!.display?.data;
+
+        return {
+          id: obj.data!.objectId,
+          type: obj.data!.type!,
+          name: content?.fields?.name || display?.name || "Unknown NFT",
+          description:
+            content?.fields?.description || display?.description || "",
+          image_url: content?.fields?.image_url || display?.image_url || "",
+          display: display,
+        };
+      });
+  } catch (error) {
+    console.error("Error fetching user NFTs:", error);
+    return [];
   }
 };

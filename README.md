@@ -16,6 +16,7 @@ sui client new-env --alias local --rpc http://127.0.0.1:9000
 ## Upgrade Sui
 
 ```bash
+rustup update stable
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
 ```
 
@@ -50,6 +51,7 @@ pnpm dev
 ## Seed le wallet 2
 
 ```sh
+sui client addresses
 sui client switch --address 0x7097cf9a9a572cb87a74c2c0f114d61792a17d6bd7e8eafa2796b1c49e32b741
 sui client faucet
 npx tsx scripts/mint-mock-tokens.ts
@@ -78,8 +80,9 @@ sui move coverage source --module raffles
 
 ## TODO
 
-- ajouter les NFTs
-- adapter le front
+- adapter le front avec les NFTs
+- dans le mockNFT, Pas sur que les getters soient utiles, voir sur raffle comment on voit les datas de raffle et comparer avec nft
+- faire un point sur l'uml et les futures features
 - ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - ajouter tax sur les redeem (seulement les success ?)
 - adapter le front
@@ -88,10 +91,9 @@ sui move coverage source --module raffles
 
 ## Futur
 
-- check uml, en fct virer admincap ?
 - faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
 - voir si outils de sécu existent comme pour solidity
-- min_ticket peut etre égal à max_ticket ?
+- min_ticket peut etre égal à max_ticket, est ce souhaité une raffle avec un nombre exact de tickets ?
 
 ## Liens Utiles
 
@@ -102,33 +104,3 @@ sui move coverage source --module raffles
 - [Polymedia Bidder](https://github.com/juzybits/polymedia-bidder/blob/main/src/sui/sources/user.move) : Un exemple de contrat Move pour un système de soumission d'enchères sur Polymedia.
 - [Aptos Raffle](https://github.com/mokshyaprotocol/aptos-raffle/blob/main/sources/raffle.move)
 - [Linear Vesting Contract Example](https://github.com/Origin-Byte/nft-protocol/blob/e8e8efd77ab15d7b2cf30958fd748dbb3afbdaab/contracts/originmate/sources/linear_vesting.move#L157)
-
-## Events
-
-```sh
-use sui::event;
-public struct RandomNumber has copy, drop {
-    random_number: u64,
-}
-
-public fun test_random(r: &Random, ctx: &mut TxContext) {
-    let mut generator = r.new_generator(ctx);
-    let random_number = generator.generate_u64_in_range(1, 10);
-    event::emit(RandomNumber { random_number });
-    random_number;
-}
-```
-
-```sh
-const txResult = await signAndExecute({
-    transaction: tx
-});
-
-await new Promise((resolve) => setTimeout(resolve, 2000));
-
-const eventsResult = await client.queryEvents({
-    query: { Transaction: txResult.digest }
-});
-
-const firstEvent = eventsResult.data[0]?.parsedJson
-```
