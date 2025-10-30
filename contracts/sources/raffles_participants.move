@@ -1,4 +1,4 @@
-module raffles::raffles;
+module raffles::raffles_participants;
 
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
@@ -20,7 +20,7 @@ const EInsufficientPayment: u64 = 8;
 const EExceedsMaxTickets: u64 = 9;
 const ERaffleNotReady: u64 = 10;
 
-// === RAFFLE STATUSES ===
+// === STATUSES ===
 const IN_PROGRESS: u8 = 0;
 const COMPLETED: u8 = 1;
 const FAILED: u8 = 2;
@@ -42,6 +42,11 @@ public struct RewardRedeemed has copy, drop { raffle_id: object::ID, winner: add
 public struct AdminCap has key, store { id: UID }
 
 // === STRUCTURES ===
+public struct Participant has copy, drop, store {
+    user: address,
+    tickets: u64,
+}
+
 public struct Raffle<phantom Reward, phantom Payment> has key {
     id: UID,
     reward: Balance<Reward>,
@@ -50,7 +55,7 @@ public struct Raffle<phantom Reward, phantom Payment> has key {
     min_tickets: u64,
     max_tickets: u64,
     ticket_price: u64,
-    participants: vector<address>,
+    participants: vector<Participant>,
     balance: Balance<Payment>,
     winner: address,
     status: u8,
@@ -64,13 +69,13 @@ public struct NFTRaffle<T: key + store, phantom Payment> has key {
     min_tickets: u64,
     max_tickets: u64,
     ticket_price: u64,
-    participants: vector<address>,
+    participants: vector<Participant>,
     balance: Balance<Payment>,
     winner: address,
     status: u8,
 }
 
-// === INIT FUNCTION ===
+// === INIT ===
 fun init(ctx: &mut TxContext) {
     transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender())
 }
@@ -180,14 +185,14 @@ public fun buy_nft_ticket<T: key + store, Payment>(
     );
 }
 
-// === WINNER SELECTION ===
+// === WINNER SELECTION (pondérée) ===
 entry fun determine_winner<Reward, Payment>(
     raffle: &mut Raffle<Reward, Payment>,
     r: &Random,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let (status, winner) = pick_winner(
+    let (status, winner) = pick_weighted_winner(
         &raffle.participants,
         raffle.min_tickets,
         raffle.max_tickets,
@@ -211,7 +216,7 @@ entry fun determine_nft_winner<T: key + store, Payment>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let (status, winner) = pick_winner(
+    let (status, winner) = pick_weighted_winner(
         &raffle.participants,
         raffle.min_tickets,
         raffle.max_tickets,
@@ -229,23 +234,37 @@ entry fun determine_nft_winner<T: key + store, Payment>(
     }
 }
 
-// === REDEEM FUNCTIONS ===
+// === FACTORIZED REDEEM LOGIC ===
+fun internal_redeem_balance<Reward>(
+    raffle_id: object::ID,
+    balance: &mut Balance<Reward>,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    if (balance.value() > 0) {
+        let reward = coin::from_balance(balance.withdraw_all(), ctx);
+        transfer::public_transfer(reward, recipient);
+        event::emit(RewardRedeemed { raffle_id, winner: recipient });
+    };
+}
+
 #[allow(lint(self_transfer))]
 public fun redeem<Reward, Payment>(raffle: &mut Raffle<Reward, Payment>, ctx: &mut TxContext) {
     assert!(raffle.status != IN_PROGRESS, EGameAlreadyCompleted);
-    let raffle_id = object::uid_to_inner(&raffle.id);
+    let id = object::uid_to_inner(&raffle.id);
 
     if (raffle.status == FAILED) {
         refund_participant(
-            raffle_id,
+            id,
             &mut raffle.participants,
             &mut raffle.balance,
             raffle.ticket_price,
             ctx,
         );
     } else {
-        internal_redeem_balance(raffle_id, false, &mut raffle.reward, raffle.winner, ctx);
-    };
+        assert!(ctx.sender() == raffle.winner, EInvalidOwner);
+        internal_redeem_balance(id, &mut raffle.reward, raffle.winner, ctx);
+    }
 }
 
 #[allow(lint(self_transfer))]
@@ -254,21 +273,43 @@ public fun redeem_nft<T: key + store, Payment>(
     ctx: &mut TxContext,
 ) {
     assert!(raffle.status != IN_PROGRESS, EGameAlreadyCompleted);
-    let raffle_id = object::uid_to_inner(&raffle.id);
+    let id = object::uid_to_inner(&raffle.id);
 
     if (raffle.status == FAILED) {
         refund_participant(
-            raffle_id,
+            id,
             &mut raffle.participants,
             &mut raffle.balance,
             raffle.ticket_price,
             ctx,
         );
-    } else if (option::is_some(&raffle.reward)) {
-        let nft = option::extract(&mut raffle.reward);
-        transfer::public_transfer(nft, raffle.winner);
-        event::emit(RewardRedeemed { raffle_id, winner: raffle.winner });
-    };
+    } else {
+        assert!(ctx.sender() == raffle.winner, EInvalidOwner);
+        if (option::is_some(&raffle.reward)) {
+            let nft = option::extract(&mut raffle.reward);
+            transfer::public_transfer(nft, raffle.winner);
+            event::emit(RewardRedeemed { raffle_id: id, winner: raffle.winner });
+        };
+    }
+}
+
+// === OWNER REDEEM FACTORIZED ===
+fun internal_owner_redeem<Reward, Payment>(
+    raffle_id: object::ID,
+    reward_balance: &mut Balance<Reward>,
+    payment_balance: &mut Balance<Payment>,
+    owner: address,
+    status: u8,
+    ctx: &mut TxContext,
+) {
+    if (status == FAILED) {
+        internal_redeem_balance<Reward>(raffle_id, reward_balance, owner, ctx);
+    } else if (payment_balance.value() > 0) {
+        let payment = coin::from_balance(payment_balance.withdraw_all(), ctx);
+        let amount = coin::value(&payment);
+        transfer::public_transfer(payment, owner);
+        event::emit(RefundIssued { raffle_id, user: owner, amount });
+    }
 }
 
 public fun redeem_owner<Reward, Payment>(
@@ -277,25 +318,14 @@ public fun redeem_owner<Reward, Payment>(
 ) {
     assert!(raffle.status != IN_PROGRESS, EGameAlreadyCompleted);
     assert!(raffle.owner == ctx.sender(), EInvalidOwner);
-    let raffle_id = object::uid_to_inner(&raffle.id);
-
-    if (raffle.status == FAILED) {
-        internal_redeem_balance(
-            raffle_id,
-            true,
-            &mut raffle.reward,
-            raffle.owner,
-            ctx,
-        );
-    } else {
-        internal_redeem_balance(
-            raffle_id,
-            false,
-            &mut raffle.balance,
-            raffle.owner,
-            ctx,
-        );
-    }
+    internal_owner_redeem(
+        object::uid_to_inner(&raffle.id),
+        &mut raffle.reward,
+        &mut raffle.balance,
+        raffle.owner,
+        raffle.status,
+        ctx,
+    );
 }
 
 public fun redeem_nft_owner<T: key + store, Payment>(
@@ -304,26 +334,25 @@ public fun redeem_nft_owner<T: key + store, Payment>(
 ) {
     assert!(raffle.status != IN_PROGRESS, EGameAlreadyCompleted);
     assert!(raffle.owner == ctx.sender(), EInvalidOwner);
-    let raffle_id = object::uid_to_inner(&raffle.id);
 
-    if (raffle.status == FAILED) {
-        if (option::is_some(&raffle.reward)) {
-            let nft = option::extract(&mut raffle.reward);
-            transfer::public_transfer(nft, raffle.owner);
-            event::emit(RefundIssued { raffle_id, user: raffle.owner, amount: 0 });
-        };
+    let id = object::uid_to_inner(&raffle.id);
+    if (raffle.status == FAILED && option::is_some(&raffle.reward)) {
+        let nft = option::extract(&mut raffle.reward);
+        transfer::public_transfer(nft, raffle.owner);
+        event::emit(RefundIssued { raffle_id: id, user: raffle.owner, amount: 0 });
     } else if (raffle.balance.value() > 0) {
-        internal_redeem_balance(
-            raffle_id,
-            false,
-            &mut raffle.balance,
-            raffle.owner,
-            ctx,
-        );
+        let payment = coin::from_balance(raffle.balance.withdraw_all(), ctx);
+        let amount = coin::value(&payment);
+        transfer::public_transfer(payment, raffle.owner);
+        event::emit(RefundIssued {
+            raffle_id: id,
+            user: raffle.owner,
+            amount,
+        });
     }
 }
 
-// === COMMON UTILITIES ===
+// === UTILITIES ===
 fun validate_raffle_config(
     end_date: u64,
     now: u64,
@@ -338,7 +367,7 @@ fun validate_raffle_config(
 
 fun handle_ticket_purchase<Payment>(
     raffle_id: object::ID,
-    participants: &mut vector<address>,
+    participants: &mut vector<Participant>,
     balance: &mut Balance<Payment>,
     payment: Coin<Payment>,
     amount_tickets: u64,
@@ -352,25 +381,43 @@ fun handle_ticket_purchase<Payment>(
     assert!((end_date > clock::timestamp_ms(clock) && status == IN_PROGRESS), ERaffleExpired);
     assert!(amount_tickets > 0 && coin::value(&payment) > 0, EInvalidTicketCount);
     assert!(coin::value(&payment) >= amount_tickets * ticket_price, EInsufficientPayment);
-    assert!(participants.length() + amount_tickets <= max_tickets, EExceedsMaxTickets);
 
-    coin::put(balance, payment);
+    let mut total_tickets = 0;
     let mut i = 0;
-    while (i < amount_tickets) {
-        participants.push_back(ctx.sender());
+    while (i < vector::length(participants)) {
+        let p = vector::borrow(participants, i);
+        total_tickets = total_tickets + p.tickets;
         i = i + 1;
     };
+    assert!(total_tickets + amount_tickets <= max_tickets, EExceedsMaxTickets);
+
+    coin::put(balance, payment);
+    append_or_update(participants, sender(ctx), amount_tickets);
 
     event::emit(TicketPurchased {
         raffle_id,
-        buyer: ctx.sender(),
+        buyer: sender(ctx),
         tickets: amount_tickets,
         total_paid: amount_tickets * ticket_price,
     });
 }
 
-fun pick_winner(
-    participants: &vector<address>,
+fun append_or_update(participants: &mut vector<Participant>, user: address, tickets: u64) {
+    let mut i = 0;
+    let len = vector::length(participants);
+    while (i < len) {
+        let p = vector::borrow_mut(participants, i);
+        if (p.user == user) {
+            p.tickets = p.tickets + tickets;
+            return
+        };
+        i = i + 1;
+    };
+    vector::push_back(participants, Participant { user, tickets });
+}
+
+fun pick_weighted_winner(
+    participants: &vector<Participant>,
     min_tickets: u64,
     max_tickets: u64,
     end_date: u64,
@@ -380,100 +427,69 @@ fun pick_winner(
     ctx: &mut TxContext,
 ): (u8, address) {
     assert!(
-        (end_date <= clock.timestamp_ms()) || (participants.length() == max_tickets),
+        (end_date <= clock.timestamp_ms()) || (total_tickets(participants) == max_tickets),
         ERaffleNotReady,
     );
     assert!(status == IN_PROGRESS, EGameAlreadyCompleted);
 
-    if (participants.length() < min_tickets) {
+    let total = total_tickets(participants);
+    if (total < min_tickets) {
         return (FAILED, @0x0)
     };
 
     let mut generator = r.new_generator(ctx);
-    let random_index = generator.generate_u64_in_range(0, participants.length() - 1);
-    let winner = *participants.borrow(random_index);
-    (COMPLETED, winner)
+    let random_ticket = generator.generate_u64_in_range(0, total - 1);
+
+    let mut cumulative = 0;
+    let mut i = 0;
+    while (i < vector::length(participants)) {
+        let p = vector::borrow(participants, i);
+        cumulative = cumulative + p.tickets;
+        if (random_ticket < cumulative) {
+            return (COMPLETED, p.user)
+        };
+        i = i + 1;
+    };
+    (FAILED, @0x0)
 }
 
-fun internal_redeem_balance<T>(
-    raffle_id: object::ID,
-    is_refund: bool,
-    balance: &mut Balance<T>,
-    recipient: address,
-    ctx: &mut TxContext,
-) {
-    if (balance.value() > 0) {
-        let reward = coin::from_balance(balance.withdraw_all(), ctx);
-        let amount = coin::value(&reward);
-        transfer::public_transfer(reward, recipient);
-        if (is_refund) {
-            event::emit(RefundIssued { raffle_id, user: recipient, amount });
-        } else {
-            event::emit(RewardRedeemed { raffle_id, winner: recipient });
-        }
+fun total_tickets(participants: &vector<Participant>): u64 {
+    let mut total = 0;
+    let mut i = 0;
+    while (i < vector::length(participants)) {
+        total = total + vector::borrow(participants, i).tickets;
+        i = i + 1;
     };
+    total
 }
 
 #[allow(lint(self_transfer))]
 fun refund_participant<Payment>(
     raffle_id: object::ID,
-    participants: &mut vector<address>,
+    participants: &mut vector<Participant>,
     balance: &mut Balance<Payment>,
     ticket_price: u64,
     ctx: &mut TxContext,
 ) {
     let mut i = 0;
-    let length = participants.length();
     let mut new_participants = vector::empty();
-    let mut tickets = 0;
+    let mut refund_amount = 0;
 
-    while (i < length) {
-        if (*participants.borrow(i) == ctx.sender()) {
-            tickets = tickets + 1;
+    while (i < vector::length(participants)) {
+        let p = vector::borrow(participants, i);
+        if (p.user == sender(ctx)) {
+            refund_amount = refund_amount + p.tickets * ticket_price;
         } else {
-            new_participants.push_back(*participants.borrow(i));
+            vector::push_back(&mut new_participants, *p);
         };
         i = i + 1;
     };
 
-    if (tickets > 0) {
-        let refund_amount = tickets * ticket_price;
+    if (refund_amount > 0) {
         assert!(balance.value() >= refund_amount, EInsufficientPayment);
         *participants = new_participants;
         let refund = coin::from_balance(balance.split(refund_amount), ctx);
-        transfer::public_transfer(refund, ctx.sender());
-        event::emit(RefundIssued { raffle_id, user: ctx.sender(), amount: refund_amount });
+        transfer::public_transfer(refund, sender(ctx));
+        event::emit(RefundIssued { raffle_id, user: sender(ctx), amount: refund_amount });
     };
 }
-
-// === TEST HELPERS ===
-#[test_only]
-public fun get_participants<Reward, Payment>(r: &Raffle<Reward, Payment>): vector<address> {
-    r.participants
-}
-#[test_only]
-public fun get_balance<Reward, Payment>(r: &Raffle<Reward, Payment>): &Balance<Payment> {
-    &r.balance
-}
-#[test_only]
-public fun get_reward<Reward, Payment>(r: &Raffle<Reward, Payment>): &Balance<Reward> { &r.reward }
-#[test_only]
-public fun get_winner<Reward, Payment>(r: &Raffle<Reward, Payment>): address { r.winner }
-#[test_only]
-public fun get_status<Reward, Payment>(r: &Raffle<Reward, Payment>): u8 { r.status }
-#[test_only]
-public fun get_nft_participants<T: key + store, Payment>(
-    r: &NFTRaffle<T, Payment>,
-): vector<address> { r.participants }
-#[test_only]
-public fun get_nft_balance<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): &Balance<Payment> {
-    &r.balance
-}
-#[test_only]
-public fun has_nft_reward<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): bool {
-    option::is_some(&r.reward)
-}
-#[test_only]
-public fun get_nft_winner<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): address { r.winner }
-#[test_only]
-public fun get_nft_status<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): u8 { r.status }

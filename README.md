@@ -80,6 +80,9 @@ sui move coverage source --module raffles
 
 ## TODO
 
+- tester les events
+- essayer de retirer deux fois les rewards, refunds. nft et coins
+
 - adapter le front avec les NFTs
 - dans le mockNFT, Pas sur que les getters soient utiles, voir sur raffle comment on voit les datas de raffle et comparer avec nft
 - faire un point sur l'uml et les futures features
@@ -90,6 +93,19 @@ sui move coverage source --module raffles
 - Mettre en ligne avec une alternative à Vercel
 
 ## Futur
+
+- ADMIN:
+- avoir une liste des coins et nft acceptés:
+  - pouvoir consulter et modifier cette liste
+  - mettre les assert
+- avoir des raffles admin où on peut:
+  - choisir un nb de ticket max par wallet (implémenter sur les raffles de base ?)
+  - utiliser un nft ou coin non listé
+  - pouvoir pauser/resumer une raffle ou alors tout le contrat ?
+  - autres points ?
+- blacklister des addresses:
+
+  - pouvoir consulter et modifier cette liste
 
 - faire des scenarios de raffle, essayer de tricher, voler les fonds, etc
 - voir si outils de sécu existent comme pour solidity
