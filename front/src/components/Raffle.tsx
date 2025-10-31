@@ -193,30 +193,39 @@ export function Raffle({
     <div className="w-full max-w-md mx-auto">
       {/* Header with reward */}
       <div className="text-center mb-6">
-        {raffle.is_nft_raffle && raffle.nft_reward ? (
-          <div className="bg-gradient-to-r from-purple-400/20 to-pink-500/20 px-6 py-4 rounded-xl border border-purple-400/30">
-            <div className="flex flex-col items-center space-y-3">
-              <span className="text-3xl">🖼️</span>
-              {raffle.nft_reward.image_url && (
-                <img
-                  src={raffle.nft_reward.image_url}
-                  alt={raffle.nft_reward.name}
-                  className="w-20 h-20 object-cover rounded-lg"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              )}
-              <div className="text-lg font-bold text-purple-400">
-                {raffle.nft_reward.name}
-              </div>
-              {raffle.nft_reward.description && (
-                <div className="text-sm text-gray-300 text-center max-w-xs">
-                  {raffle.nft_reward.description}
-                </div>
-              )}
+        {raffle.is_nft_raffle ? (
+          !raffle.nft_reward ? (
+            <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
+              <span className="text-3xl">🏆</span>
+              <span className="text-2xl font-bold text-yellow-400">
+                Already Redeemed
+              </span>
             </div>
-          </div>
+          ) : (
+            <div className="bg-gradient-to-r from-purple-400/20 to-pink-500/20 px-6 py-4 rounded-xl border border-purple-400/30">
+              <div className="flex flex-col items-center space-y-3">
+                <span className="text-3xl">🖼️</span>
+                {raffle.nft_reward.image_url && (
+                  <img
+                    src={raffle.nft_reward.image_url}
+                    alt={raffle.nft_reward.name}
+                    className="w-20 h-20 object-cover rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                )}
+                <div className="text-lg font-bold text-purple-400">
+                  {raffle.nft_reward.name}
+                </div>
+                {raffle.nft_reward.description && (
+                  <div className="text-sm text-gray-300 text-center max-w-xs">
+                    {raffle.nft_reward.description}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
         ) : (
           <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
             <span className="text-3xl">🏆</span>

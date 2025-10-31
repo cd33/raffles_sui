@@ -51,7 +51,9 @@ export function NFTSelector({ selectedNFT, onSelect }: NFTSelectorProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Select an NFT as reward:</h3>
+      <h3 className="text-lg text-black font-semibold">
+        Select an NFT as reward:
+      </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
         {nfts.map((nft) => (
           <div
@@ -73,7 +75,9 @@ export function NFTSelector({ selectedNFT, onSelect }: NFTSelectorProps) {
                 }}
               />
             )}
-            <h4 className="font-medium text-sm truncate">{nft.name}</h4>
+            <h4 className="font-medium text-sm text-black truncate">
+              {nft.name}
+            </h4>
             <p className="text-xs text-gray-500 truncate">{nft.description}</p>
             <p className="text-xs text-gray-400 truncate mt-1">
               ID: {nft.id.slice(0, 8)}...{nft.id.slice(-8)}
@@ -83,7 +87,7 @@ export function NFTSelector({ selectedNFT, onSelect }: NFTSelectorProps) {
       </div>
       {selectedNFT && (
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm">
+          <p className="text-sm text-black">
             <strong>Selected:</strong> {selectedNFT.name}
           </p>
         </div>

@@ -638,6 +638,8 @@ export const getUserNFTs = async (
             name?: string;
             description?: string;
             image_url?: string;
+            creator?: string;
+            attributes?: Record<string, string>;
           };
         };
         const display = obj.data!.display?.data;
@@ -649,7 +651,8 @@ export const getUserNFTs = async (
           description:
             content?.fields?.description || display?.description || "",
           image_url: content?.fields?.image_url || display?.image_url || "",
-          display: display,
+          creator: content?.fields?.creator || display?.creator || "",
+          attributes: content?.fields?.attributes || display?.attributes || {},
         };
       });
   } catch (error) {

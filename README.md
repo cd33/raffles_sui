@@ -70,7 +70,7 @@ sui move build
 sui move test
 ```
 
-### Coverage
+## Coverage
 
 ```sh
 sui move test --coverage --dev
@@ -78,14 +78,15 @@ sui move coverage summary
 sui move coverage source --module raffles
 ```
 
+## Debug
+
+```move
+use std::debug;
+debug::print(&std::string::utf8(b"toto"));
+```
+
 ## TODO
 
-- tester les events
-- essayer de retirer deux fois les rewards, refunds. nft et coins
-
-- adapter le front avec les NFTs
-- dans le mockNFT, Pas sur que les getters soient utiles, voir sur raffle comment on voit les datas de raffle et comparer avec nft
-- faire un point sur l'uml et les futures features
 - ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - ajouter tax sur les redeem (seulement les success ?)
 - adapter le front

@@ -122,41 +122,7 @@ entry fun burn_nft(nft: MockNFT) {
     id.delete();
 }
 
-/// Fonctions getter publiques
-public fun name(nft: &MockNFT): &String {
-    &nft.name
-}
-
-public fun description(nft: &MockNFT): &String {
-    &nft.description
-}
-
-public fun image_url(nft: &MockNFT): &Url {
-    &nft.image_url
-}
-
-public fun attributes(nft: &MockNFT): &String {
-    &nft.attributes
-}
-
-public fun creator(nft: &MockNFT): address {
-    nft.creator
-}
-
-public fun serial_number(nft: &MockNFT): u64 {
-    nft.serial_number
-}
-
-public fun total_minted(collection_cap: &CollectionCap): u64 {
-    collection_cap.total_minted
-}
-
-public fun max_supply(collection_cap: &CollectionCap): u64 {
-    collection_cap.max_supply
-}
-
 // ======== Fonctions de test ========
-
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext): CollectionCap {
     CollectionCap {
@@ -201,4 +167,37 @@ public fun mint_for_testing(collection_cap: &mut CollectionCap, ctx: &mut TxCont
         creator: collection_cap.creator,
         serial_number: collection_cap.total_minted,
     }
+}
+
+#[test_only]
+public fun name(nft: &MockNFT): &String {
+    &nft.name
+}
+#[test_only]
+public fun description(nft: &MockNFT): &String {
+    &nft.description
+}
+#[test_only]
+public fun image_url(nft: &MockNFT): &Url {
+    &nft.image_url
+}
+#[test_only]
+public fun attributes(nft: &MockNFT): &String {
+    &nft.attributes
+}
+#[test_only]
+public fun creator(nft: &MockNFT): address {
+    nft.creator
+}
+#[test_only]
+public fun serial_number(nft: &MockNFT): u64 {
+    nft.serial_number
+}
+#[test_only]
+public fun total_minted(collection_cap: &CollectionCap): u64 {
+    collection_cap.total_minted
+}
+#[test_only]
+public fun max_supply(collection_cap: &CollectionCap): u64 {
+    collection_cap.max_supply
 }
