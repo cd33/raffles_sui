@@ -19,14 +19,24 @@ const USER2: address = @0x5678;
 fun test_create_raffle_success() {
     let mut scenario = test::begin(ADMIN);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
 
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10, // prix du ticket
@@ -35,6 +45,8 @@ fun test_create_raffle_success() {
             10, // max tickets
             ctx(&mut scenario),
         );
+
+        test::return_shared(registry);
     };
 
     // Tester l'état dans une nouvelle transaction
@@ -63,13 +75,24 @@ fun test_create_raffle_success() {
 fun test_helper_functions_success() {
     let mut scenario = test::begin(ADMIN);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(500, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             15,
@@ -78,6 +101,7 @@ fun test_helper_functions_success() {
             8, // max tickets
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Tester les fonctions getter dans une nouvelle transaction
@@ -112,14 +136,25 @@ fun test_helper_functions_success() {
 fun test_buy_tickets_success() {
     let mut scenario = test::begin(ADMIN);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la raffle
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10,
@@ -128,6 +163,7 @@ fun test_buy_tickets_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Acheter des tickets
@@ -159,14 +195,25 @@ fun test_buy_tickets_success() {
 fun test_multiple_users_buy_tickets_success() {
     let mut scenario = test::begin(ADMIN);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la raffle
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10,
@@ -175,6 +222,7 @@ fun test_multiple_users_buy_tickets_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur 1 achète 2 tickets
@@ -235,8 +283,16 @@ fun test_multiple_users_buy_tickets_success() {
 fun test_determine_winner_success() {
     let mut scenario = test::begin(ADMIN);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
     next_tx(&mut scenario, @0x0);
@@ -248,7 +304,10 @@ fun test_determine_winner_success() {
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10,
@@ -257,6 +316,7 @@ fun test_determine_winner_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur 1 achète 2 tickets (nombre minimum pour que la raffle puisse se terminer)
@@ -315,8 +375,16 @@ fun test_determine_winner_success() {
 fun test_determine_winner_failed_logic() {
     let mut scenario = test::begin(@0x0);
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
-
     clock::set_for_testing(&mut clock, 1000);
+
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer l'état Random
     next_tx(&mut scenario, @0x0);
@@ -328,7 +396,10 @@ fun test_determine_winner_failed_logic() {
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10,
@@ -337,6 +408,7 @@ fun test_determine_winner_failed_logic() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Acheter seulement quelques tickets (insuffisant)
@@ -388,6 +460,15 @@ fun test_redeem_and_redeem_owner_status_completed_success() {
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
     clock::set_for_testing(&mut clock, 1000);
 
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
+
     // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
     next_tx(&mut scenario, @0x0);
     {
@@ -398,7 +479,10 @@ fun test_redeem_and_redeem_owner_status_completed_success() {
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10,
@@ -407,6 +491,7 @@ fun test_redeem_and_redeem_owner_status_completed_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur 1 achète 2 tickets (nombre minimum pour que la raffle puisse se terminer)
@@ -519,6 +604,15 @@ fun test_redeem_and_redeem_owner_status_failed_success() {
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
     clock::set_for_testing(&mut clock, 1000);
 
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
+
     // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
     next_tx(&mut scenario, @0x0);
     {
@@ -530,7 +624,10 @@ fun test_redeem_and_redeem_owner_status_failed_success() {
     {
         // Test avec REWARD pour les deux tokens
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, REWARD>(
+            &registry,
             &clock,
             reward_coin,
             200,
@@ -539,6 +636,7 @@ fun test_redeem_and_redeem_owner_status_failed_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur 1 achète 2 tickets
@@ -705,6 +803,15 @@ fun test_redeem_and_redeem_owner_status_failed_no_participant_success() {
     let mut clock = clock::create_for_testing(ctx(&mut scenario));
     clock::set_for_testing(&mut clock, 1000);
 
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
+
     // Créer l'état Random global (sender @0x0 pour éviter les erreurs du random)
     next_tx(&mut scenario, @0x0);
     {
@@ -715,7 +822,10 @@ fun test_redeem_and_redeem_owner_status_failed_no_participant_success() {
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             200,
@@ -724,6 +834,7 @@ fun test_redeem_and_redeem_owner_status_failed_no_participant_success() {
             10,
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Avancer le temps pour que la raffle se termine

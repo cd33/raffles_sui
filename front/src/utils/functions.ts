@@ -2,7 +2,7 @@ import type { SuiClient } from "@mysten/sui/client";
 import { PaginatedEvents } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
-import { PACKAGE_ID } from "../deployed_addresses.json";
+import { PACKAGE_ID, WHITELIST_REGISTRY } from "../deployed_addresses.json";
 
 export type RaffleType = {
   id: { id: string };
@@ -114,6 +114,7 @@ export const create_nft_raffle_tx = (
     target: `${PACKAGE_ID}::raffles::create_nft_raffle`,
     typeArguments: [nft_type, payment_type],
     arguments: [
+      tx.object(WHITELIST_REGISTRY),
       tx.sharedObjectRef({
         objectId: SUI_CLOCK_OBJECT_ID,
         initialSharedVersion: 1,
@@ -172,6 +173,7 @@ export const create_raffle_tx = (
     target: `${PACKAGE_ID}::raffles::create_raffle`,
     typeArguments: [reward_type, payment_type],
     arguments: [
+      tx.object(WHITELIST_REGISTRY),
       tx.sharedObjectRef({
         objectId: SUI_CLOCK_OBJECT_ID,
         initialSharedVersion: 1,

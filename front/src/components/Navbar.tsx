@@ -66,6 +66,16 @@ export function Navbar({ title }: { title: string }) {
             >
               My Raffles
             </Link>
+            <Link
+              to="/admin"
+              className={`text-xl text-gray-300 ${
+                location.pathname === "/admin"
+                  ? "text-red-500 hover:text-red-300"
+                  : "hover:text-white"
+              }`}
+            >
+              Admin
+            </Link>
           </div>
         </div>
         {burgerOpen && (
@@ -121,6 +131,17 @@ export function Navbar({ title }: { title: string }) {
               onClick={() => setBurgerOpen(false)}
             >
               My Raffles
+            </Link>
+            <Link
+              to="/admin"
+              className={`w-fit text-2xl text-gray-300 my-2 ${
+                location.pathname === "/admin"
+                  ? "text-red-500 hover:text-red-300"
+                  : "hover:text-white"
+              }`}
+              onClick={() => setBurgerOpen(false)}
+            >
+              Admin
             </Link>
           </div>
         )}

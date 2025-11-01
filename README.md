@@ -87,8 +87,8 @@ debug::print(&std::string::utf8(b"toto"));
 
 ## TODO
 
-- ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - ajouter tax sur les redeem (seulement les success ?)
+- ajouter fonctions admin (pause, resume, withdraw funds), autre ?
 - adapter le front
 - tests: faire de grande simulation scenarisées, plusieurs fois redeem_owner, plusieurs fois redeem meme user... essayer de casser le contrat
 - Mettre en ligne avec une alternative à Vercel
@@ -96,9 +96,6 @@ debug::print(&std::string::utf8(b"toto"));
 ## Futur
 
 - ADMIN:
-- avoir une liste des coins et nft acceptés:
-  - pouvoir consulter et modifier cette liste
-  - mettre les assert
 - avoir des raffles admin où on peut:
   - choisir un nb de ticket max par wallet (implémenter sur les raffles de base ?)
   - utiliser un nft ou coin non listé

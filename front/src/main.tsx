@@ -8,6 +8,7 @@ import App from "./App.tsx";
 import { Navbar } from "./components/Navbar.tsx";
 import "./index.css";
 import { networkConfig } from "./networkConfig.ts";
+import { AdminPage } from "./pages/AdminPage.tsx";
 import CreateRafflePage from "./pages/CreateRafflePage.tsx";
 import MyRafflesPage from "./pages/MyRafflesPage.tsx";
 
@@ -25,6 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<App />} />
                 <Route path="/my-raffles" element={<MyRafflesPage />} />
                 <Route path="/create-raffle" element={<CreateRafflePage />} />
+                <Route path="/admin" element={<AdminPage />} />
               </Routes>
             </div>
           </BrowserRouter>

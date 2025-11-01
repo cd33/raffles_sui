@@ -8,6 +8,7 @@ import "dotenv/config";
 import { writeFileSync } from "fs";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
+import { SUI_TYPE_MOVE } from "../src/utils/whitelistManager";
 
 const find_one_by_type = (changes: SuiObjectChange[], type: string) => {
   const object_change = changes.find(
@@ -84,10 +85,21 @@ if (published_event?.type != "published") {
 
 const package_id = published_event.packageId;
 const admin_cap_type = `${package_id}::raffles::AdminCap`;
-
 const admin_cap_id = find_one_by_type(objectChanges, admin_cap_type);
 if (!admin_cap_id) {
   console.log("Error: Could not find AdminCap creation in results of publish");
+  process.exit(1);
+}
+
+const whitelist_registry_type = `${package_id}::raffles::WhitelistRegistry`;
+const whitelist_registry_id = find_one_by_type(
+  objectChanges,
+  whitelist_registry_type,
+);
+if (!whitelist_registry_id) {
+  console.log(
+    "Error: Could not find WhitelistRegistry creation in results of publish",
+  );
   process.exit(1);
 }
 
@@ -101,6 +113,7 @@ const nft_collection_id = find_one_by_type(objectChanges, nft_collection_type);
 let deployed_addresses = {
   PACKAGE_ID: package_id,
   ADMIN_CAP: admin_cap_id,
+  WHITELIST_REGISTRY: whitelist_registry_id,
   MOCK_USDT_TREASURY: usdt_treasury_id,
   MOCK_USDC_TREASURY: usdc_treasury_id,
   MOCK_NFT_COLLECTION: nft_collection_id,
@@ -112,6 +125,62 @@ console.log("deployed_addresses", deployed_addresses);
 
 // Attendre quelques blocks
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+await wait(2500);
+
+// Ajouter les tokens et NFT à la whitelist
+console.log("Adding tokens and NFT to whitelist...");
+const whitelist_tx = new Transaction();
+
+// Ajouter SUI à la whitelist (format Move exact)
+whitelist_tx.moveCall({
+  target: `${package_id}::raffles::add_coin_to_whitelist`,
+  arguments: [
+    whitelist_tx.object(admin_cap_id),
+    whitelist_tx.object(whitelist_registry_id),
+    whitelist_tx.pure.string(SUI_TYPE_MOVE),
+  ],
+});
+
+// Ajouter MOCK_USDT à la whitelist
+whitelist_tx.moveCall({
+  target: `${package_id}::raffles::add_coin_to_whitelist`,
+  arguments: [
+    whitelist_tx.object(admin_cap_id),
+    whitelist_tx.object(whitelist_registry_id),
+    whitelist_tx.pure.string(`${package_id}::mock_usdt::MOCK_USDT`),
+  ],
+});
+
+// Ajouter MOCK_USDC à la whitelist
+whitelist_tx.moveCall({
+  target: `${package_id}::raffles::add_coin_to_whitelist`,
+  arguments: [
+    whitelist_tx.object(admin_cap_id),
+    whitelist_tx.object(whitelist_registry_id),
+    whitelist_tx.pure.string(`${package_id}::mock_usdc::MOCK_USDC`),
+  ],
+});
+
+// Ajouter MockNFT à la whitelist
+whitelist_tx.moveCall({
+  target: `${package_id}::raffles::add_nft_to_whitelist`,
+  arguments: [
+    whitelist_tx.object(admin_cap_id),
+    whitelist_tx.object(whitelist_registry_id),
+    whitelist_tx.pure.string(`${package_id}::mock_nft::MockNFT`),
+  ],
+});
+
+await client.signAndExecuteTransaction({
+  transaction: whitelist_tx,
+  signer: keypair,
+  options: {
+    showEffects: true,
+  },
+});
+
+console.log("✅ Added SUI, MOCK_USDT, MOCK_USDC, and MockNFT to whitelist");
+
 await wait(2500);
 
 // Mint des tokens mock pour les tests
@@ -245,8 +314,9 @@ const ticket_price = 2_000_000_000; // 2 SUI
 
 raffle_tx.moveCall({
   target: `${package_id}::raffles::create_raffle`,
-  typeArguments: ["0x2::sui::SUI", "0x2::sui::SUI"],
+  typeArguments: [SUI_TYPE_MOVE, SUI_TYPE_MOVE],
   arguments: [
+    raffle_tx.object(whitelist_registry_id),
     raffle_tx.sharedObjectRef({
       objectId: SUI_CLOCK_OBJECT_ID,
       initialSharedVersion: 1,

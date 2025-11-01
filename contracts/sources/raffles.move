@@ -1,5 +1,7 @@
 module raffles::raffles;
 
+use std::string::{Self, String};
+use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
@@ -19,6 +21,8 @@ const EInvalidTicketCount: u64 = 7;
 const EInsufficientPayment: u64 = 8;
 const EExceedsMaxTickets: u64 = 9;
 const ERaffleNotReady: u64 = 10;
+const ECoinNotWhitelisted: u64 = 11;
+const ENFTNotWhitelisted: u64 = 12;
 
 // === RAFFLE STATUSES ===
 const IN_PROGRESS: u8 = 0;
@@ -40,6 +44,14 @@ public struct RewardRedeemed has copy, drop { raffle_id: object::ID, winner: add
 
 // === ADMIN CAP ===
 public struct AdminCap has key, store { id: UID }
+
+// === WHITELIST REGISTRY ===
+public struct WhitelistRegistry has key {
+    id: UID,
+    admin: address,
+    whitelisted_coins: vector<std::string::String>,
+    whitelisted_nfts: vector<std::string::String>,
+}
 
 // === STRUCTURES ===
 public struct Raffle<phantom Reward, phantom Payment> has key {
@@ -72,11 +84,24 @@ public struct NFTRaffle<T: key + store, phantom Payment> has key {
 
 // === INIT FUNCTION ===
 fun init(ctx: &mut TxContext) {
-    transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender())
+    let admin_address = ctx.sender();
+
+    // Create and transfer AdminCap
+    transfer::transfer(AdminCap { id: object::new(ctx) }, admin_address);
+
+    // Create WhitelistRegistry
+    let registry = WhitelistRegistry {
+        id: object::new(ctx),
+        admin: admin_address,
+        whitelisted_coins: vector::empty(),
+        whitelisted_nfts: vector::empty(),
+    };
+    transfer::share_object(registry);
 }
 
 // === RAFFLE CREATION ===
 public fun create_raffle<Reward, Payment>(
+    registry: &WhitelistRegistry,
     clock: &Clock,
     reward: Coin<Reward>,
     ticket_price: u64,
@@ -85,6 +110,9 @@ public fun create_raffle<Reward, Payment>(
     max_tickets: u64,
     ctx: &mut TxContext,
 ) {
+    check_coin_whitelist<Reward>(registry);
+    check_coin_whitelist<Payment>(registry);
+
     validate_raffle_config(end_date, clock.timestamp_ms(), min_tickets, max_tickets, ticket_price);
     assert!(coin::value(&reward) > 0, EInvalidRewardAmount);
 
@@ -107,6 +135,7 @@ public fun create_raffle<Reward, Payment>(
 }
 
 public fun create_nft_raffle<T: key + store, Payment>(
+    registry: &WhitelistRegistry,
     clock: &Clock,
     reward_nft: T,
     ticket_price: u64,
@@ -115,6 +144,9 @@ public fun create_nft_raffle<T: key + store, Payment>(
     max_tickets: u64,
     ctx: &mut TxContext,
 ) {
+    check_nft_whitelist<T>(registry);
+    check_coin_whitelist<Payment>(registry);
+
     validate_raffle_config(end_date, clock.timestamp_ms(), min_tickets, max_tickets, ticket_price);
 
     let raffle = NFTRaffle {
@@ -323,6 +355,118 @@ public fun redeem_nft_owner<T: key + store, Payment>(
     }
 }
 
+// === WHITELIST MANAGEMENT ===
+public fun add_coin_to_whitelist(
+    _: &AdminCap,
+    registry: &mut WhitelistRegistry,
+    coin_type: String,
+) {
+    if (!vector::contains(&registry.whitelisted_coins, &coin_type)) {
+        vector::push_back(&mut registry.whitelisted_coins, coin_type);
+    }
+}
+
+public fun remove_coin_from_whitelist(
+    _: &AdminCap,
+    registry: &mut WhitelistRegistry,
+    coin_type: String,
+) {
+    let (found, index) = vector::index_of(&registry.whitelisted_coins, &coin_type);
+    if (found) {
+        vector::remove(&mut registry.whitelisted_coins, index);
+    }
+}
+
+public fun add_nft_to_whitelist(_: &AdminCap, registry: &mut WhitelistRegistry, nft_type: String) {
+    if (!vector::contains(&registry.whitelisted_nfts, &nft_type)) {
+        vector::push_back(&mut registry.whitelisted_nfts, nft_type);
+    }
+}
+
+public fun remove_nft_from_whitelist(
+    _: &AdminCap,
+    registry: &mut WhitelistRegistry,
+    nft_type: String,
+) {
+    let (found, index) = vector::index_of(&registry.whitelisted_nfts, &nft_type);
+    if (found) {
+        vector::remove(&mut registry.whitelisted_nfts, index);
+    }
+}
+
+// Fonction helper pour normaliser un type en retirant le préfixe 0x et en paddant l'adresse
+fun normalize_type_string(type_str: String): String {
+    let bytes = type_str.as_bytes();
+
+    // Si le type commence par "0x", on le retire
+    if (bytes.length() >= 2 && *bytes.borrow(0) == 48 && *bytes.borrow(1) == 120) {
+        // Extraire la partie après "0x"
+        let mut new_bytes = vector::empty<u8>();
+        let mut i = 2;
+        while (i < bytes.length()) {
+            vector::push_back(&mut new_bytes, *bytes.borrow(i));
+            i = i + 1;
+        };
+        string::utf8(new_bytes)
+    } else {
+        type_str
+    }
+}
+
+fun check_coin_whitelist<T>(registry: &WhitelistRegistry) {
+    let type_name_ascii = type_name::with_original_ids<T>();
+    let type_name_str = string::utf8(*type_name_ascii.into_string().as_bytes());
+
+    // Vérifier d'abord avec le type exact tel que retourné par type_name
+    if (vector::contains(&registry.whitelisted_coins, &type_name_str)) {
+        return
+    };
+
+    // Sinon, normaliser et chercher dans la whitelist normalisée
+    let normalized_type = normalize_type_string(type_name_str);
+
+    // Vérifier chaque entrée de la whitelist en la normalisant
+    let mut i = 0;
+    while (i < registry.whitelisted_coins.length()) {
+        let whitelisted = *registry.whitelisted_coins.borrow(i);
+        let normalized_whitelisted = normalize_type_string(whitelisted);
+
+        if (normalized_whitelisted == normalized_type) {
+            return
+        };
+        i = i + 1;
+    };
+
+    // Si aucune correspondance trouvée, abort
+    abort ECoinNotWhitelisted
+}
+
+fun check_nft_whitelist<T>(registry: &WhitelistRegistry) {
+    let type_name_ascii = type_name::with_original_ids<T>();
+    let type_name_str = string::utf8(*type_name_ascii.into_string().as_bytes());
+
+    // Vérifier d'abord avec le type exact
+    if (vector::contains(&registry.whitelisted_nfts, &type_name_str)) {
+        return
+    };
+
+    // Sinon, normaliser et chercher
+    let normalized_type = normalize_type_string(type_name_str);
+
+    let mut i = 0;
+    while (i < registry.whitelisted_nfts.length()) {
+        let whitelisted = *registry.whitelisted_nfts.borrow(i);
+        let normalized_whitelisted = normalize_type_string(whitelisted);
+
+        if (normalized_whitelisted == normalized_type) {
+            return
+        };
+        i = i + 1;
+    };
+
+    abort ENFTNotWhitelisted
+}
+
 // === COMMON UTILITIES ===
 fun validate_raffle_config(
     end_date: u64,
@@ -477,3 +621,88 @@ public fun has_nft_reward<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): b
 public fun get_nft_winner<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): address { r.winner }
 #[test_only]
 public fun get_nft_status<T: key + store, Payment>(r: &NFTRaffle<T, Payment>): u8 { r.status }
+#[test_only]
+public fun create_test_registry_with_types<T, Payment>(
+    is_nft: bool,
+    ctx: &mut TxContext,
+): WhitelistRegistry {
+    if (is_nft) {
+        let reward_type_name = type_name::with_original_ids<T>();
+        let reward_type_str = string::utf8(*reward_type_name.into_string().as_bytes());
+
+        let payment_type_name = type_name::with_original_ids<Payment>();
+        let payment_type_str = string::utf8(*payment_type_name.into_string().as_bytes());
+
+        let mut whitelisted_coins = vector::empty();
+        vector::push_back(&mut whitelisted_coins, payment_type_str);
+
+        let mut whitelisted_nfts = vector::empty();
+        vector::push_back(&mut whitelisted_nfts, reward_type_str);
+
+        WhitelistRegistry {
+            id: object::new(ctx),
+            admin: ctx.sender(),
+            whitelisted_coins,
+            whitelisted_nfts,
+        }
+    } else {
+        let reward_type_name = type_name::with_original_ids<T>();
+        let reward_type_str = string::utf8(*reward_type_name.into_string().as_bytes());
+
+        let payment_type_name = type_name::with_original_ids<Payment>();
+        let payment_type_str = string::utf8(*payment_type_name.into_string().as_bytes());
+
+        let mut whitelisted_coins = vector::empty();
+        vector::push_back(&mut whitelisted_coins, reward_type_str);
+        vector::push_back(&mut whitelisted_coins, payment_type_str);
+
+        WhitelistRegistry {
+            id: object::new(ctx),
+            admin: ctx.sender(),
+            whitelisted_coins,
+            whitelisted_nfts: vector::empty(),
+        }
+    }
+}
+#[test_only]
+public fun create_and_share_test_registry<T, Payment>(
+    is_nft: bool,
+    ctx: &mut TxContext,
+): object::ID {
+    let registry = create_test_registry_with_types<T, Payment>(is_nft, ctx);
+    let id = object::uid_to_inner(&registry.id);
+    transfer::share_object(registry);
+    id
+}
+#[test_only]
+public fun create_and_share_empty_registry(ctx: &mut TxContext): object::ID {
+    let registry = WhitelistRegistry {
+        id: object::new(ctx),
+        admin: ctx.sender(),
+        whitelisted_coins: vector::empty(),
+        whitelisted_nfts: vector::empty(),
+    };
+    let id = object::uid_to_inner(&registry.id);
+    transfer::share_object(registry);
+    id
+}
+#[test_only]
+public fun create_test_admin_cap(ctx: &mut TxContext): AdminCap {
+    AdminCap { id: object::new(ctx) }
+}
+#[test_only]
+public fun get_whitelisted_coins(registry: &WhitelistRegistry): &vector<String> {
+    &registry.whitelisted_coins
+}
+#[test_only]
+public fun get_whitelisted_nfts(registry: &WhitelistRegistry): &vector<String> {
+    &registry.whitelisted_nfts
+}
+#[test_only]
+public fun is_coin_whitelisted(registry: &WhitelistRegistry, coin_type: String): bool {
+    vector::contains(&registry.whitelisted_coins, &coin_type)
+}
+#[test_only]
+public fun is_nft_whitelisted(registry: &WhitelistRegistry, nft_type: String): bool {
+    vector::contains(&registry.whitelisted_nfts, &nft_type)
+}

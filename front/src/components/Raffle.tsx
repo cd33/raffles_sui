@@ -230,10 +230,11 @@ export function Raffle({
           <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-yellow-400/20 to-orange-500/20 px-6 py-3 rounded-full border border-yellow-400/30">
             <span className="text-3xl">🏆</span>
             <span className="text-2xl font-bold text-yellow-400">
-              {rewardType === "SUI"
-                ? raffle.reward / 10 ** SUI_DECIMALS
-                : raffle.reward / 10 ** USD_DECIMALS}{" "}
-              {rewardType}
+              {Number(raffle.reward) === 0 || !raffle.reward
+                ? "Already Redeemed"
+                : rewardType === "SUI"
+                  ? raffle.reward / 10 ** SUI_DECIMALS + " " + rewardType
+                  : raffle.reward / 10 ** USD_DECIMALS + " " + rewardType}
             </span>
           </div>
         )}

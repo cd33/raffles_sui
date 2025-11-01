@@ -14,7 +14,7 @@ import {
   getProductionCoinsConfig,
 } from "../config/mockTokens";
 import {
-  createNFTRaffleTransaction,
+  create_nft_raffle_tx,
   createRaffleTransaction,
   NFTType,
   USD_DECIMALS,
@@ -72,7 +72,7 @@ function CreateRafflePage() {
           return;
         }
 
-        transaction = createNFTRaffleTransaction(
+        transaction = create_nft_raffle_tx(
           selectedNFT.id,
           selectedNFT.type,
           end_date,

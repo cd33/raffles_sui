@@ -26,12 +26,23 @@ fun test_double_redeem_scenario_success() {
     {
         random::create_for_testing(ctx(&mut scenario));
     };
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, PAYMENT>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la raffle
     next_tx(&mut scenario, ADMIN);
     {
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, PAYMENT>(
+            &registry,
             &clock,
             reward_coin,
             10, // prix du ticket
@@ -40,6 +51,8 @@ fun test_double_redeem_scenario_success() {
             10, // max tickets
             ctx(&mut scenario),
         );
+
+        test::return_shared(registry);
     };
 
     // Utilisateur achète 2 tickets
@@ -179,13 +192,24 @@ fun test_double_redeem_failed_scenario_success() {
     {
         random::create_for_testing(ctx(&mut scenario));
     };
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<REWARD, REWARD>(
+            false,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la raffle avec un minimum élevé pour qu'elle échoue
     next_tx(&mut scenario, ADMIN);
     {
         // Test avec REWARD pour les deux tokens pour simplifier
         let reward_coin = coin::mint_for_testing<REWARD>(1000, ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
+
         raffles::create_raffle<REWARD, REWARD>(
+            &registry,
             &clock,
             reward_coin,
             200, // prix du ticket élevé
@@ -194,6 +218,7 @@ fun test_double_redeem_failed_scenario_success() {
             10, // max tickets
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur achète seulement 2 tickets (insuffisant pour le minimum)
@@ -342,12 +367,22 @@ fun test_nft_double_redeem_scenario_success() {
     {
         random::create_for_testing(ctx(&mut scenario));
     };
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<MockNFT, PAYMENT>(
+            true,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la NFT raffle
     next_tx(&mut scenario, ADMIN);
     {
         let nft = create_mock_nft(ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
         raffles::create_nft_raffle<MockNFT, PAYMENT>(
+            &registry,
             &clock,
             nft,
             10, // prix du ticket
@@ -356,6 +391,7 @@ fun test_nft_double_redeem_scenario_success() {
             10, // max tickets
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur achète 2 tickets
@@ -495,12 +531,22 @@ fun test_nft_double_redeem_failed_scenario_success() {
     {
         random::create_for_testing(ctx(&mut scenario));
     };
+    // Créer et partager le registry
+    next_tx(&mut scenario, ADMIN);
+    {
+        let _registry_id = raffles::create_and_share_test_registry<MockNFT, PAYMENT>(
+            true,
+            ctx(&mut scenario),
+        );
+    };
 
     // Créer la NFT raffle avec un minimum élevé pour qu'elle échoue
     next_tx(&mut scenario, ADMIN);
     {
         let nft = create_mock_nft(ctx(&mut scenario));
+        let registry = test::take_shared<raffles::WhitelistRegistry>(&scenario);
         raffles::create_nft_raffle<MockNFT, PAYMENT>(
+            &registry,
             &clock,
             nft,
             200, // prix du ticket élevé
@@ -509,6 +555,7 @@ fun test_nft_double_redeem_failed_scenario_success() {
             10, // max tickets
             ctx(&mut scenario),
         );
+        test::return_shared(registry);
     };
 
     // Utilisateur achète seulement 2 tickets (insuffisant pour le minimum)
